@@ -2,9 +2,10 @@
 // gate's mode never moves backwards, without a `baseline-raise: <label> — <reason>` line in the PR body, which the
 // reviewer reads. It compares the watched files with the merge base, so a number the author copied into the baseline in
 // the same PR cannot pass by equalling itself. (Moved here from aurum-web's scripts/quality, step 6.160.)
-//   aurum-gates baseline-guard [--base <ref>] [--report=<label>]
+//   aurum-gates baseline-guard [--base <ref>] [--report=<label>] [--config <module>]
 //   --base     the commit to compare with (CI gives the merge commit's first parent); default: the merge base with origin/main
 //   --report   print that label's findings without failing
+//   --config   a module (path from the repo root) whose named export `config` replaces `DEFAULT_CONFIG` (see below)
 // The PR body is read live (PR_NUMBER, GITHUB_TOKEN, GITHUB_REPOSITORY), so adding the line and re-running the job is
 // enough; PR_BODY overrides it for a local run.
 //
@@ -158,7 +159,8 @@ export function guard({ base, head, changed = [], renames = new Map(), config = 
     }
     failures.push(...(watched.extra?.(context) ?? []));
   }
-  return failures.map((f) => ({ ...f, allow: f.allow ?? allowLine(f.label) }));
+  // A finding no line can allow (`allowable: false`) keeps its rule's own "Allow:" text.
+  return failures.map((f) => (f.allowable === false ? f : { ...f, allow: f.allow ?? allowLine(f.label) }));
 }
 
 /** The findings the PR body does not allow: each needs its own `baseline-raise: <label> … — <reason>` line. */

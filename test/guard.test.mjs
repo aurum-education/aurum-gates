@@ -184,6 +184,26 @@ describe('a repo that watches more files (config)', () => {
   });
 });
 
+describe('a finding no line can allow', () => {
+  it('keeps its own Allow text and is never let through by the body', () => {
+    const extra = ({ path }) => [{ label: 'limits', where: path, rule: 'removed', detail: 'x', allowable: false }];
+    const failures = guard({
+      base: files({ 'quality/limits.json': { a: 1 } }),
+      head: files({ 'quality/limits.json': { a: 1 } }),
+      config: {
+        roots: ['quality/limits.json'],
+        watched: [{ match: /^quality\/limits\.json$/, label: () => 'limits', extra }],
+        rules: {},
+        soft: () => false,
+      },
+    });
+    assert.deepEqual(failures, [
+      { label: 'limits', where: 'quality/limits.json', rule: 'removed', detail: 'x', allowable: false },
+    ]);
+    assert.deepEqual(unallowed(failures, 'baseline-raise: limits — a reason'), failures);
+  });
+});
+
 describe('the baseline-raise line', () => {
   const failures = [{ label: 'reuse' }, { label: 'g3 flake' }];
   const left = (body) => unallowed(failures, body).map((f) => f.label);
@@ -287,6 +307,28 @@ describe('the CLI against a git repository', () => {
     assert.equal(result.status, 1);
     assert.ok(result.stderr.includes('GATE baseline-guard ✗ quality/baselines/other.json  new-file'));
     rmSync(join(repo, 'quality/baselines/other.json'));
+  });
+
+  it('loads a repo config with --config, and exits 2 for a missing module or export', () => {
+    write(
+      'guard-config.mjs',
+      'export const config = { roots: ["quality/limits.json"], watched: [{ match: /^quality\\/limits\\.json$/, label: () => "limits" }], rules: {}, soft: () => false };\n',
+    );
+    write('no-config.mjs', 'export const other = 1;\n');
+    write('quality/limits.json', { a: 1 });
+    git('add', '.');
+    git('commit', '-q', '-m', 'limits');
+    write('quality/limits.json', { a: 2 });
+    const failed = run(undefined, '--config', 'guard-config.mjs');
+    assert.equal(failed.status, 1);
+    assert.ok(failed.stderr.includes('quality/limits.json a  raised'));
+    assert.equal(run('baseline-raise: limits — a reason', '--config', 'guard-config.mjs').status, 0);
+    for (const bad of ['missing.mjs', 'no-config.mjs']) {
+      const result = run(undefined, '--config', bad);
+      assert.equal(result.status, 2);
+      assert.ok(result.stderr.includes('aurum-gates ✗ baseline-guard --config:'));
+    }
+    git('reset', '-q', '--hard', 'HEAD~1');
   });
 
   it('exits 2 when it cannot run: an unknown base commit or a broken file', () => {
