@@ -1,6 +1,6 @@
 // The `aurum-gates` command (DS-059 §4.1). Exit codes: 0 clean (or findings in `report`), 1 findings, 2 the gate could
 // not run (a bad command, an unknown gate, a crash, a missing or broken file).
-import { join } from 'node:path';
+import { relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { EXIT_BROKEN, countFailures, finish, runGate } from './gate.mjs';
 import { GATES } from './gates/index.mjs';
@@ -24,9 +24,10 @@ export async function main(argv, { root = process.cwd(), gates = GATES } = {}) {
     if (at < 0) return runGuard(root, args);
     // A repo that watches more files names its config module; a missing module or export is a gate that cannot run.
     try {
-      const { config } = await import(pathToFileURL(join(root, args[at + 1] ?? '')).href);
+      const file = resolve(root, args[at + 1] ?? '');
+      const { config } = await import(pathToFileURL(file).href);
       if (!config) throw new Error('the module has no `config` export');
-      return runGuard(root, [...args.slice(0, at), ...args.slice(at + 2)], config);
+      return runGuard(root, [...args.slice(0, at), ...args.slice(at + 2)], config, relative(root, file));
     } catch (error) {
       return broken(`baseline-guard --config: ${error.message}`);
     }

@@ -220,6 +220,7 @@ describe('the baseline-raise line', () => {
     assert.deepEqual(left('baseline-raise: reuse — '), all);
     assert.deepEqual(left('baseline-raise: other — a reason'), all);
     assert.deepEqual(left('baseline-raise: reuse-extra — a reason'), all);
+    assert.deepEqual(left('baseline-raise: reuse mode — demoted'), all, 'the mode line allows only the mode');
     assert.deepEqual(left('I did not add baseline-raise: reuse — a reason'), all);
   });
 });
@@ -323,6 +324,16 @@ describe('the CLI against a git repository', () => {
     assert.equal(failed.status, 1);
     assert.ok(failed.stderr.includes('quality/limits.json a  raised'));
     assert.equal(run('baseline-raise: limits — a reason', '--config', 'guard-config.mjs').status, 0);
+    // The config decides what is watched, so a PR that edits it is a finding of its own (review F4).
+    const edited =
+      'export const config = { roots: ["quality/gates.json"], watched: [], rules: {}, soft: () => true };\n';
+    write('guard-config.mjs', edited);
+    const silenced = run(undefined, '--config', 'guard-config.mjs');
+    assert.equal(silenced.status, 1);
+    assert.ok(silenced.stderr.includes('GATE baseline-guard ✗ guard-config.mjs  config-changed'));
+    const allowed = run('baseline-raise: guard-config — a reason', '--config', 'guard-config.mjs');
+    assert.equal(allowed.status, 0, allowed.stderr);
+    git('checkout', '--', 'guard-config.mjs');
     for (const bad of ['missing.mjs', 'no-config.mjs']) {
       const result = run(undefined, '--config', bad);
       assert.equal(result.status, 2);

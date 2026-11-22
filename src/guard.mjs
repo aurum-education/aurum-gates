@@ -5,7 +5,7 @@
 //   aurum-gates baseline-guard [--base <ref>] [--report=<label>] [--config <module>]
 //   --base     the commit to compare with (CI gives the merge commit's first parent); default: the merge base with origin/main
 //   --report   print that label's findings without failing
-//   --config   a module (path from the repo root) whose named export `config` replaces `DEFAULT_CONFIG` (see below)
+//   --config   a module (a path, relative to the repo root) whose named export `config` replaces `DEFAULT_CONFIG` (see below)
 // The PR body is read live (PR_NUMBER, GITHUB_TOKEN, GITHUB_REPOSITORY), so adding the line and re-running the job is
 // enough; PR_BODY overrides it for a local run.
 //
@@ -50,6 +50,10 @@ export const RULES = {
   removed: {
     why: 'a removed file or entry takes its findings out of the ratchet. DS-059 §4.1.',
     fix: 'keep it, or name the cause in the allowance line.',
+  },
+  'config-changed': {
+    why: 'the --config module decides what the guard watches and what it only reports, so a PR that edits it could silence the guard. DS-059 §4.1.',
+    fix: 'leave the config as the merge base has it, or change it in a PR of its own.',
   },
   'mode-backwards': {
     why: 'a gate moves report → ratchet → enforce and never back. DS-059 §4.1.',
@@ -166,7 +170,7 @@ export function guard({ base, head, changed = [], renames = new Map(), config = 
 /** The findings the PR body does not allow: each needs its own `baseline-raise: <label> … — <reason>` line. */
 export function unallowed(failures, body) {
   const allowed = (label) =>
-    new RegExp(`^baseline-raise: ${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?: [^\\n]*)? — \\S`, 'm').test(body);
+    new RegExp(`^baseline-raise: ${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} — \\S`, 'm').test(body);
   return failures.filter((f) => f.allowable === false || !allowed(f.label));
 }
 
@@ -207,6 +211,13 @@ export function readRenames(root, ref) {
   return new Map(lines.map((line) => line.split('\t').slice(1)));
 }
 
+/** Whether the config module's text differs from the merge base's; a module the base lacks (its first PR) is new, not changed. */
+function configChanged(root, ref, file) {
+  const sha = git(root, ['rev-parse', '--verify', `${ref}^{commit}`]).trim();
+  if (spawnSync('git', ['cat-file', '-e', `${sha}:${file}`], { cwd: root }).status !== 0) return false;
+  return git(root, ['show', `${sha}:${file}`]) !== readFileSync(join(root, file), 'utf8');
+}
+
 /** How long the one GitHub call may take before the guard fails as a gate that could not run. */
 const PR_BODY_TIMEOUT_MS = 15_000;
 
@@ -223,7 +234,7 @@ async function prBody() {
 }
 
 /** The guard as a gate: `argv` is the CLI's arguments. */
-export function run(root, argv, config = DEFAULT_CONFIG) {
+export function run(root, argv, config = DEFAULT_CONFIG, configFile) {
   const baseAt = argv.indexOf('--base');
   const reported = new Set(argv.filter((a) => a.startsWith('--report=')).map((a) => a.slice('--report='.length)));
   return runGate({
@@ -238,10 +249,19 @@ export function run(root, argv, config = DEFAULT_CONFIG) {
       const head = readHead(root, config);
       const changed = git(root, ['diff', '--name-only', ref, 'HEAD']).split('\n').filter(Boolean);
       const failures = guard({ base, head, changed, renames: readRenames(root, ref), config });
+      if (configFile && configChanged(root, ref, configFile))
+        failures.push({
+          label: 'guard-config',
+          where: configFile,
+          rule: 'config-changed',
+          detail: 'The module differs from the merge base',
+          allow: allowLine('guard-config'),
+        });
       // No finding needs no body (and no network): the common case costs nothing.
       const open = failures.length ? unallowed(failures, await prBody()) : [];
       const soft = (f) =>
         f.rule !== 'mode-backwards' &&
+        f.rule !== 'config-changed' && // the edited config must not be able to report itself away
         ([...reported].some((l) => f.label === l || f.label.startsWith(`${l} `)) || config.soft(f, { base, head }));
       return open.map((f) => (soft(f) ? { ...f, mode: 'report' } : f));
     },

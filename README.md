@@ -11,7 +11,7 @@ repo with Claude Code: see `CLAUDE.md`.
 ```
 
 then `pnpm install`. A repo pins one exact tag and bumps it in its own PR. The tarball's integrity is **not** in
-pnpm's lockfile for a URL dependency, so a tag is never moved (see `CLAUDE.md`).
+pnpm's lockfile for a URL dependency, so a tag is never moved (see `CLAUDE.md`); a repository ruleset on `refs/tags/v*` that blocks update and deletion enforces it (owner setting). The `install-probe` job in `pr.yml` repeats the pnpm version of `packageManager`: change both together.
 
 ## Use
 
