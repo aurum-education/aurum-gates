@@ -1,0 +1,6 @@
+{
+  "demo-report": { "mode": "report" },
+  "demo-ratchet": { "mode": "ratchet" },
+  "demo-enforce": { "mode": "enforce" },
+  "demo-bad-mode": { "mode": "off" }
+}
