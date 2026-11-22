@@ -1,0 +1,50 @@
+name: Build · Gates release tag
+run-name: Build · Gates release tag · ${{ github.sha }}
+
+# A release is the version in package.json on main (README § Release): consumers pin the tag's codeload tarball
+# (DS-059 §4.1). Merging a version bump is all a release needs: this run checks the commit and tags vX.Y.Z when no tag
+# has that name. Sessions can't push tags, so the workflow does. A tag is never moved or deleted.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write # creates the release tag
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false # the checks run without a token that could push; the tag step passes its own
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Decide what this run does
+        id: release
+        run: |
+          tag="v$(node -p "require('./package.json').version")"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF_NAME" != main ]; then echo "::error::Releases come from main only"; exit 1; fi
+          if git rev-parse -q --verify "refs/tags/$tag" > /dev/null; then echo "tag_missing=false" >> "$GITHUB_OUTPUT"; else echo "tag_missing=true" >> "$GITHUB_OUTPUT"; fi
+      - if: steps.release.outputs.tag_missing == 'true'
+        run: pnpm install --frozen-lockfile
+      - if: steps.release.outputs.tag_missing == 'true'
+        run: pnpm format:check && pnpm check:honest-tests && pnpm test && pnpm check:no-skips
+      - name: Tag the release
+        if: steps.release.outputs.tag_missing == 'true'
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git tag "$TAG" "$GITHUB_SHA"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "refs/tags/$TAG"

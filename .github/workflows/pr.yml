@@ -1,0 +1,65 @@
+name: PR · Gates checks
+run-name: PR · Gates checks · ${{ github.event.pull_request.number && format('#{0}', github.event.pull_request.number) || github.sha }}
+
+on:
+  # PRs only: release.yml runs the checks again before it tags.
+  pull_request:
+
+permissions:
+  contents: read
+
+# A newer push to the same PR supersedes this run.
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    # The CI Docker VM when the repository variable CI_RUNS_ON_DOCKER is `true` (ADR-0032 amendment 1). No secret, no
+    # OIDC token, no environment: this job only reads.
+    runs-on: ${{ vars.CI_RUNS_ON_DOCKER == 'true' && vars.CI_POOL_FULL != 'true' && fromJSON('["self-hosted", "aurum-docker"]') || 'ubuntu-24.04' }}
+    permissions:
+      contents: read
+      pull-requests: read # the PR body, for the baseline guard below
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2 # the merge commit and its parents: the baseline guard compares with the first parent
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm format:check
+      - run: pnpm check:honest-tests
+      - run: pnpm test
+      - run: pnpm check:no-skips
+      - name: Baseline guard (this repo has no baselines yet; the step proves the command runs from a checkout)
+        run: node bin/aurum-gates.mjs baseline-guard --base HEAD^1
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # DS-059 §4.1: consumers install this repo as a codeload tarball with no token. This job installs the PR's own commit
+  # the way a consumer does and runs the command, from a runner of the same pool the consumers' CI uses.
+  install-probe:
+    runs-on: ${{ vars.CI_RUNS_ON_DOCKER == 'true' && vars.CI_POOL_FULL != 'true' && fromJSON('["self-hosted", "aurum-docker"]') || 'ubuntu-24.04' }}
+    steps:
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 10.28.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: Install the tarball with no token, run the command
+        env:
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          mkdir consumer && cd consumer
+          printf '{"name":"consumer","private":true,"dependencies":{"@jmal1/aurum-gates":"https://codeload.github.com/jmal1/aurum-gates/tar.gz/%s"}}' "$SHA" > package.json
+          pnpm install
+          set +e
+          out="$(pnpm exec aurum-gates frobnicate 2>&1)"; code=$?
+          echo "$out"
+          [ "$code" = 2 ] && echo "$out" | grep -q 'unknown command "frobnicate"'
