@@ -56,7 +56,7 @@ jobs:
           SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           mkdir consumer && cd consumer
-          printf '{"name":"consumer","private":true,"dependencies":{"@jmal1/aurum-gates":"https://codeload.github.com/jmal1/aurum-gates/tar.gz/%s"}}' "$SHA" > package.json
+          printf '{"name":"consumer","private":true,"dependencies":{"@jmal1/aurum-gates":"https://codeload.github.com/aurum-education/aurum-gates/tar.gz/%s"}}' "$SHA" > package.json
           pnpm install
           set +e
           out="$(pnpm exec aurum-gates frobnicate 2>&1)"; code=$?

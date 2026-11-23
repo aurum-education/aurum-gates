@@ -6,7 +6,7 @@
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "https://github.com/jmal1/aurum-gates.git"
+    "url": "https://github.com/aurum-education/aurum-gates.git"
   },
   "bin": {
     "aurum-gates": "bin/aurum-gates.mjs"

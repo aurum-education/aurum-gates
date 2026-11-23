@@ -7,7 +7,7 @@ repo with Claude Code: see `CLAUDE.md`.
 ## Install (no token)
 
 ```json
-"@jmal1/aurum-gates": "https://codeload.github.com/jmal1/aurum-gates/tar.gz/refs/tags/vX.Y.Z"
+"@jmal1/aurum-gates": "https://codeload.github.com/aurum-education/aurum-gates/tar.gz/refs/tags/vX.Y.Z"
 ```
 
 then `pnpm install`. A repo pins one exact tag and bumps it in its own PR. The tarball's integrity is **not** in
