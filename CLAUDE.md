@@ -1,6 +1,6 @@
 # aurum-gates
 
-This repo holds `@jmal1/aurum-gates`, the shared quality-gate mechanics of Isomorph (public name Aurum): gate modes, shrink-only baselines, the one failure message and the baseline guard (DS-059 §4.1). It is **public** and holds gate code only: no tenant content, no secrets. Consumers pin a tagged release by tarball (`https://codeload.github.com/jmal1/aurum-gates/tar.gz/refs/tags/vX.Y.Z`), so no token is needed to install it. Every gate (G1 to G4, G6, G7) lands here in its own step.
+This repo holds `@jmal1/aurum-gates`, the shared quality-gate mechanics of Isomorph (public name Aurum): gate modes, shrink-only baselines, the one failure message and the baseline guard (DS-059 §4.1). It is **public** and holds gate code only: no tenant content, no secrets. Consumers pin a tagged release by tarball (`https://codeload.github.com/aurum-education/aurum-gates/tar.gz/refs/tags/vX.Y.Z`), so no token is needed to install it. Every gate (G1 to G4, G6, G7) lands here in its own step.
 
 Product context, requirements, and design live in the Isomorph vault (`../../vault/` when checked out in the
 workspace). This repo links to them by ID (REQ-…, DS-…, ADR-…, step X.Y) and never copies them.
