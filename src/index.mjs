@@ -3,3 +3,4 @@ export * from './gate.mjs';
 export { DEFAULT_CONFIG, RULES as GUARD_RULES, guard, leaves, run as runGuard, unallowed } from './guard.mjs';
 export { tighten, tightened } from './tighten.mjs';
 export { GATES } from './gates/index.mjs';
+export { evaluate, globToRegExp, markersOf, run as runEvidence, statusOf } from './evidence.mjs';

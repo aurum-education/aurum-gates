@@ -46,13 +46,14 @@ upward to get green (`baseline-raise: <gate> — <reason>` in the PR body, read 
 
 ## Layout
 
-| Path                                 | Contents                                                                    |
-| ------------------------------------ | --------------------------------------------------------------------------- |
-| `bin/aurum-gates.mjs`, `src/cli.mjs` | The CLI: `run`, `tighten`, `baseline-guard`                                 |
-| `src/gate.mjs`                       | Modes, count and ceiling compare, failure message, `runGate`, `finish`      |
-| `src/guard.mjs`                      | The baseline guard engine and its default watched files                     |
-| `src/tighten.mjs`                    | `tighten`: baselines move down only                                         |
-| `src/gates/index.mjs`                | The registry of gates (each gate step adds one)                             |
-| `test/`, `test/fixtures/`            | Tests (`node:test`) and the fixture repo root                               |
-| `docs/adr/`                          | Repo-local ADRs                                                             |
-| `.github/workflows/`                 | `pr.yml` (checks, install probe), `release.yml` (tags `vX.Y.Z` from `main`) |
+| Path                                 | Contents                                                                                                                  |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| `bin/aurum-gates.mjs`, `src/cli.mjs` | The CLI: `run`, `tighten`, `baseline-guard`, `pr-evidence`                                                                |
+| `src/gate.mjs`                       | Modes, count and ceiling compare, failure message, `runGate`, `finish`                                                    |
+| `src/guard.mjs`                      | The baseline guard engine and its default watched files                                                                   |
+| `src/evidence.mjs`                   | `pr-evidence`: the PR body and review-marker rules, the commit status                                                     |
+| `src/tighten.mjs`                    | `tighten`: baselines move down only                                                                                       |
+| `src/gates/index.mjs`                | The registry of gates (each gate step adds one)                                                                           |
+| `test/`, `test/fixtures/`            | Tests (`node:test`) and the fixture repo root                                                                             |
+| `docs/adr/`                          | Repo-local ADRs                                                                                                           |
+| `.github/workflows/`                 | `pr.yml` (checks, install probe), `pr-evidence.yml` (the `pr-evidence` status), `release.yml` (tags `vX.Y.Z` from `main`) |

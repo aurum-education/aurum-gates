@@ -20,6 +20,7 @@ pnpm's lockfile for a URL dependency, so a tag is never moved (see `CLAUDE.md`);
 | `aurum-gates run <gate> [--report]`                            | Runs a gate of `src/gates/` in its mode from `quality/gates.json`                                         |
 | `aurum-gates tighten <gate>`                                   | Lowers the gate's baseline to today's findings; never raises it (`pnpm gates:tighten` in a repo)          |
 | `aurum-gates baseline-guard [--base <ref>] [--report=<label>]` | Fails when a baseline count rises, a key is added or a mode moves backwards, unless the PR body allows it |
+| `aurum-gates pr-evidence [--all]`                              | Posts the `pr-evidence` commit status on a PR's head SHA (see below); `--all` does every open PR          |
 
 Exit codes: 0 clean (findings in `report` mode included), 1 findings, 2 the gate could not run (bad command, crash,
 missing or broken file; every mode).
@@ -60,6 +61,30 @@ moved source file (git rename detection) carries its count: a rename with an equ
 
 A repo that watches more files passes a `config` (see `DEFAULT_CONFIG` in `src/guard.mjs`), as aurum-web does for its UX
 gates (DS-060 §4.5).
+
+## PR evidence (`pr-evidence`, step 6.153)
+
+Checks a PR's body and review markers and posts the commit status `pr-evidence` on its head SHA (DS-059 §4.8). It needs
+`GITHUB_TOKEN`, `GITHUB_REPOSITORY` and `PR_NUMBER` (or `--all`), a checkout of the base branch with its history, and the
+gate's mode in `quality/gates.json` (`"pr-evidence": { "mode": "report" }`). It never runs PR code.
+
+- The body starts with the two attribution lines, has one `type:` (`fix | feature | refactor | docs | chore | log`) and a
+  `step:` line (a `log` needs no step); a `fix` has `regression-test: <path>::<test name>` naming a file the diff changes, or
+  `none — <reason>`.
+- A PR comment from the owner's account whose first line is `independent-review: pass <full sha>` is a marker. It counts
+  when the diff of that SHA, Markdown files left out, has the same `git patch-id --stable` as the head's: a rebase keeps it,
+  a code change drops it, a Markdown-only change keeps it. A later `fail` for the same code fails the status.
+- `quality/visible-paths.json` (a list of globs) names the paths a person sees; a diff touching one also needs
+  `design-review: pass <sha>`. A spec change that adds a spec, changes its `status:` or touches more than 40 lines needs the
+  spec ID after the SHA (`independent-review: pass <sha> DS-099`).
+- A `type: log` PR touching only `vault/50-Implementation/` and the Changelog needs no review marker.
+- `evidence-exempt: <reason>` in the body passes a hand-made PR (listed in the job summary); a bot author passes.
+- In `report` the status is green and its description lists what is missing; in `ratchet` or `enforce` it is red. No PR
+  comment is written. The job exits 0 unless it could not run (2).
+
+`.github/workflows/pr-evidence.yml` is the workflow (`pull_request_target`, `issue_comment` on a marker, and a manual run
+for every open PR before a ruleset first requires the status). Other repos copy it, replacing the last step with an
+install of the pinned tag (`npm install --prefix "$RUNNER_TEMP/gates" --ignore-scripts <tarball>`).
 
 ## Invariants
 
