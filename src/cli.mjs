@@ -4,10 +4,11 @@ import { relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { EXIT_BROKEN, countFailures, finish, runGate } from './gate.mjs';
 import { GATES } from './gates/index.mjs';
+import { run as runEvidence } from './evidence.mjs';
 import { run as runGuard } from './guard.mjs';
 import { tighten } from './tighten.mjs';
 
-const USAGE = `usage: aurum-gates run <gate> | tighten <gate> | baseline-guard [--base <ref>] [--report=<label>] [--config <module>]`;
+const USAGE = `usage: aurum-gates run <gate> | tighten <gate> | pr-evidence [--all] | baseline-guard [--base <ref>] [--report=<label>] [--config <module>]`;
 
 const broken = (message) => ({
   code: EXIT_BROKEN,
@@ -32,6 +33,7 @@ export async function main(argv, { root = process.cwd(), gates = GATES } = {}) {
       return broken(`baseline-guard --config: ${error.message}`);
     }
   }
+  if (command === 'pr-evidence') return runEvidence(root, argv.slice(1));
   if (command !== 'run' && command !== 'tighten')
     return broken(command ? `unknown command "${command}"` : 'no command');
   const gate = name && Object.hasOwn(gates, name) ? gates[name] : undefined;

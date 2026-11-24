@@ -1,0 +1,49 @@
+name: PR · Evidence status
+run-name: PR · Evidence status · ${{ github.event_name == 'workflow_dispatch' && 'all open PRs' || format('#{0}', github.event.pull_request.number || github.event.issue.number) }}
+
+# DS-059 §4.8 (step 6.153): publishes the `pr-evidence` commit status on a PR's head SHA. Triggers are `pull_request_target`
+# and `issue_comment`, so this file runs from the default branch's copy and never executes PR code; it reads the PR as
+# data (git diff, patch-id, the API). Light and hosted; its own file, never pr.yml (`edited` is on this workflow only).
+# The copy for the other repos installs the pinned tarball instead of running this checkout (aurum-gates' own copy here).
+# `workflow_dispatch` evaluates every open PR: run it once before a ruleset first requires the status.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited]
+  issue_comment:
+    types: [created, edited]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: pr-evidence-${{ github.event.pull_request.number || github.event.issue.number || 'all' }}
+  cancel-in-progress: true
+
+jobs:
+  evidence:
+    # A comment counts only when it is on a PR, from the owner's account, and its first line is a review marker.
+    if: >-
+      github.event_name != 'issue_comment' || (
+        github.event.issue.pull_request &&
+        contains(fromJSON('["OWNER","MEMBER"]'), github.event.comment.author_association) &&
+        (startsWith(github.event.comment.body, 'independent-review:') || startsWith(github.event.comment.body, 'design-review:')))
+    runs-on: ubuntu-slim # ADR-0108: no Docker, 1 vCPU, short
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+      statuses: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # the merge base of the PR and of each reviewed SHA
+          filter: blob:none
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - name: Evaluate
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+          ALL: ${{ github.event_name == 'workflow_dispatch' && '--all' || '' }}
+        run: node bin/aurum-gates.mjs pr-evidence $ALL
