@@ -1,0 +1,38 @@
+name: CI · Tracker wake
+run-name: CI · Tracker wake ${{ github.event_name }}
+# DS-099 amendment 1 (12.6, slice 2): wakes the workspace's tracker-sweep.yml when a PR here changes. Its own file, never
+# pr.yml (its types and cost stay as they are, DS-059 4.8). No checkout, no PR text read: only the PR number is passed.
+# TRACKER_DISPATCH is a fine-grained token (Actions read/write on isomorph-workspace only); empty for Dependabot and forks,
+# where the job skips. It never fails the PR. The copy of this file for each repo is scripts/tracker/templates/tracker-event.yml
+# in aurum-education/isomorph-workspace; keep them identical.
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, converted_to_draft, synchronize, closed]
+permissions: {}
+jobs:
+  wake:
+    runs-on: ubuntu-slim # ADR-0108
+    timeout-minutes: 2
+    steps:
+      - name: Dispatch the sweep
+        env:
+          TOKEN: ${{ secrets.TRACKER_DISPATCH }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          if [ -z "$TOKEN" ]; then echo "no TRACKER_DISPATCH here (Dependabot or fork): skipped"; exit 0; fi
+          for try in 1 2 3; do
+            code=$(curl -sS -o /dev/null -D headers.txt -w '%{http_code}' -X POST \
+              -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/aurum-education/isomorph-workspace/actions/workflows/tracker-sweep.yml/dispatches" \
+              -d "{\"ref\":\"main\",\"inputs\":{\"repo\":\"$GITHUB_REPOSITORY\",\"pr\":\"$PR\"}}") || code=000
+            if [ "$code" = 204 ]; then
+              exp=$(grep -i '^github-authentication-token-expiration:' headers.txt | cut -d' ' -f2- | tr -d '\r' || true)
+              if [ -n "$exp" ]; then
+                days=$(( ($(date -d "$exp" +%s) - $(date +%s)) / 86400 )) || days=99
+                [ "$days" -lt 14 ] && echo "::warning::TRACKER_DISPATCH expires in $days days" || true
+              fi
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::warning::the sweep was not dispatched (HTTP $code); the cron backstop will catch up"
