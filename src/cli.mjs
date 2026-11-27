@@ -6,10 +6,11 @@ import { EXIT_BROKEN, countFailures, finish, runGate } from './gate.mjs';
 import { GATES } from './gates/index.mjs';
 import { run as runEvidence } from './evidence.mjs';
 import { flakeRecords, readDir } from './flakes.mjs';
+import { githubApi, hunt } from './hunt.mjs';
 import { run as runGuard } from './guard.mjs';
 import { tighten } from './tighten.mjs';
 
-const USAGE = `usage: aurum-gates run <gate> | tighten <gate> | pr-evidence [--all] | flake-record --repo <r> --sha <s> --run <url> <firstDir> <lastDir> | baseline-guard [--base <ref>] [--report=<label>] [--config <module>]`;
+const USAGE = `usage: aurum-gates run <gate> | tighten <gate> | pr-evidence [--all] | flake-record --repo <r> --sha <s> --run <url> <firstDir> <lastDir> | flake-hunt --repo <owner/name> [--days <n>] [--workflow <file>] [--dry-run] | baseline-guard [--base <ref>] [--report=<label>] [--config <module>]`;
 
 const broken = (message) => ({
   code: EXIT_BROKEN,
@@ -18,7 +19,7 @@ const broken = (message) => ({
 });
 
 /** Runs one command and returns its result without printing or exiting; `gates` is the registry (tests pass their own). */
-export async function main(argv, { root = process.cwd(), gates = GATES } = {}) {
+export async function main(argv, { root = process.cwd(), gates = GATES, hunter } = {}) {
   const [command, name, ...rest] = argv;
   if (command === 'baseline-guard') {
     const args = argv.slice(1);
@@ -45,6 +46,24 @@ export async function main(argv, { root = process.cwd(), gates = GATES } = {}) {
     const records = flakeRecords({ repo: opt('repo'), sha: opt('sha'), run: opt('run'), first, last });
     const summary = `aurum-gates flake-record: ${records.length} record(s)`;
     return { code: 0, summary, text: [...records.map((r) => JSON.stringify(r)), summary].join('\n') };
+  }
+  if (command === 'flake-hunt') {
+    const args = argv.slice(1);
+    const opt = (n) => (args.includes(`--${n}`) ? args[args.indexOf(`--${n}`) + 1] : undefined);
+    const token = process.env.GITHUB_TOKEN;
+    if (!args.includes('--repo') || !opt('repo') || !token) return broken('flake-hunt needs --repo and GITHUB_TOKEN');
+    const gh = hunter ?? githubApi(token);
+    const days = Number(opt('days') ?? 3);
+    const since = new Date(Date.now() - days * 864e5).toISOString().slice(0, 10);
+    const stats = await hunt({
+      gh,
+      repo: opt('repo'),
+      workflow: opt('workflow'),
+      since,
+      dryRun: args.includes('--dry-run'),
+    });
+    const summary = `aurum-gates flake-hunt: ${stats.reruns} rerun-passed run(s) of ${stats.runs}, ${stats.tests} flaky test(s), ${stats.filed.length} new issue(s), ${stats.existing} already open, ${stats.infra} infra-only, ${stats.noReport} without reports`;
+    return { code: 0, summary, text: [...stats.filed, summary].join('\n') };
   }
   if (command === 'pr-evidence') return runEvidence(root, argv.slice(1));
   if (command !== 'run' && command !== 'tighten')
