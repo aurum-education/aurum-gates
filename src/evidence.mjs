@@ -43,6 +43,11 @@ export const RULES = {
     fix: 'add `regression-test: <path>::<test name>` with a test file this PR changes.',
     allow: '`regression-test: none — <reason>` when there is no runnable test; the reviewer accepts the reason.',
   },
+  guide: {
+    why: 'a feature a person sees comes with its user guide, or says why none is needed. DS-049 §4.9, DS-059 §4.8.',
+    fix: 'add a line `guide: <audience>/<slug>` (for example `guide: teacher/assign-test`) naming the guide this PR adds or updates.',
+    allow: '`guide: none — <reason>`, read by the reviewer; the job summary lists it.',
+  },
   'review-missing': {
     why: 'a change is reviewed by a thread that did not write it. DS-059 §4.8.',
     fix: 'have the reviewer post `independent-review: pass <full head sha>` as the first line of a PR comment.',
@@ -127,6 +132,14 @@ export function evaluate({ body = '', bot = false, files, specs = [], markers, p
     if (none) notes.push(`regression-test: ${test}`);
     else if (!test || !files.includes(path))
       add('regression-test', test ? `"${path}" is not a file this PR changes` : 'No `regression-test:` line');
+  }
+
+  const needsGuide = type === 'feature' && files.some(visible);
+  if (needsGuide) {
+    const guide = line(body, '^guide: (.+)$')?.[1].trim();
+    if (!guide || !/^(?:[a-z]+\/[a-z0-9-]+|none — \S.*)$/.test(guide))
+      add('guide', guide ? `"${guide}" is not a guide slug or a "none — reason"` : 'No `guide:` line');
+    else if (guide.startsWith('none')) notes.push(`guide: ${guide}`);
   }
 
   const logOnly = type === 'log' && files.every((f) => LOG_PATHS.test(f));

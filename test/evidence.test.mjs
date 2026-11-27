@@ -60,7 +60,7 @@ describe('type: fix', () => {
 });
 
 describe('the review marker', () => {
-  const b = body('type: feature', 'step: 6.1');
+  const b = body('type: feature', 'step: 6.1', 'guide: none — test fixture');
   it('fails with no marker, and with a marker for other code', () => {
     assert.deepEqual(rules({ body: b, markers: [] }), ['review-missing']);
     assert.deepEqual(rules({ body: b, patchIdOf: () => 'other' }), ['review-missing']);
@@ -99,6 +99,30 @@ describe('the review marker', () => {
       }),
       ['design-review-failed'],
     );
+  });
+  it('asks a feature a person sees for a guide line, and takes a slug or a reason', () => {
+    const visible = (f) => f.startsWith('src/pages/');
+    const files = ['src/pages/Home.tsx'];
+    const markers = [marker('independent-review'), marker('design-review')];
+    const feature = (...extra) => body('type: feature', 'step: 6.153', ...extra);
+    const r = (b) => rules({ body: b, files, visible, markers });
+    assert.deepEqual(r(feature()), ['guide']);
+    assert.deepEqual(r(feature('guide: teacher/assign-test | none — reason')), ['guide']);
+    assert.deepEqual(r(feature('guide: <audience>/<slug>')), ['guide']);
+    assert.deepEqual(r(feature('guide: none —')), ['guide']);
+    assert.deepEqual(r(feature('guide: teacher/assign-test')), []);
+    assert.deepEqual(r(feature('guide: none — error text only')), []);
+    assert.deepEqual(
+      evaluate({ ...base, body: feature('guide: none — error text only'), files, visible, markers }).notes,
+      ['guide: none — error text only'],
+    );
+  });
+  it('asks no guide of a change nobody sees, a fix or a docs PR', () => {
+    const visible = (f) => f.startsWith('src/pages/');
+    assert.deepEqual(rules({ body: body('type: feature', 'step: 6.153'), files: ['src/a.js'], visible }), []);
+    const files = ['src/pages/Home.tsx'];
+    const markers = [marker('independent-review'), marker('design-review')];
+    assert.deepEqual(rules({ body: body('type: docs', 'step: 6.153'), files, visible, markers }), []);
   });
   it('asks a substantial spec change to be named in the marker', () => {
     const specs = [{ id: 'DS-099', substantial: true }];

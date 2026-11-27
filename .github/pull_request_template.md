@@ -6,6 +6,7 @@ Requirements: REQ-… · Specs: DS-… · ADRs: ADR-…
 type: feature | fix | refactor | docs | chore | log
 step: X.Y
 regression-test: <path>::<test name> (type fix only)
+guide: <audience>/<slug> | none — <reason> (type feature that a person sees only)
 
 ## What changed
 
