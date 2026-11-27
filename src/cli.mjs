@@ -1,17 +1,20 @@
 // The `aurum-gates` command (DS-059 §4.1). Exit codes: 0 clean (or findings in `report`), 1 findings, 2 the gate could
 // not run (a bad command, an unknown gate, a crash, a missing or broken file).
-import { relative, resolve } from 'node:path';
+import { existsSync } from 'node:fs';
+import { join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { EXIT_BROKEN, countFailures, finish, runGate } from './gate.mjs';
+import { EXIT_BROKEN, EXIT_FINDINGS, GATES_FILE, countFailures, finish, modeOf, runGate } from './gate.mjs';
 import { GATES } from './gates/index.mjs';
 import { run as runEvidence } from './evidence.mjs';
 import { flakeRecords, readDir } from './flakes.mjs';
 import { githubApi, hunt } from './hunt.mjs';
+import { LEDGER_FILE, initLedger, readLedger, verdict } from './ledger.mjs';
+import { run as runProbe } from './probe.mjs';
 import { run as runGuard } from './guard.mjs';
 import { fileIssues, scan } from './sast.mjs';
 import { initBaseline, tighten } from './tighten.mjs';
 
-const USAGE = `usage: aurum-gates run <gate> | tighten <gate> | init <gate> | pr-evidence [--all] | sast-issues | flake-hunt --repo <owner/name> [--days <n>] [--workflow <file>] [--dry-run] | flake-record --repo <r> --sha <s> --run <url> <firstDir> <lastDir> | baseline-guard [--base <ref>] [--report=<label>] [--config <module>]`;
+const USAGE = `usage: aurum-gates run <gate> | tighten <gate> | init <gate> | pr-evidence [--all] | sast-issues | flake-hunt --repo <owner/name> [--days <n>] [--workflow <file>] [--dry-run] [--init-ledger] | flake-probe [--base <ref>] [--runner vitest|playwright] [--cap <n>] | flake-record --repo <r> --sha <s> --run <url> <firstDir> <lastDir> | baseline-guard [--base <ref>] [--report=<label>] [--config <module>]`;
 
 const broken = (message) => ({
   code: EXIT_BROKEN,
@@ -20,7 +23,7 @@ const broken = (message) => ({
 });
 
 /** Runs one command and returns its result without printing or exiting; `gates` is the registry (tests pass their own). */
-export async function main(argv, { root = process.cwd(), gates = GATES, hunter } = {}) {
+export async function main(argv, { root = process.cwd(), gates = GATES, hunter, runner } = {}) {
   const [command, name, ...rest] = argv;
   if (command === 'baseline-guard') {
     const args = argv.slice(1);
@@ -79,8 +82,30 @@ export async function main(argv, { root = process.cwd(), gates = GATES, hunter }
       dryRun: args.includes('--dry-run'),
     });
     const summary = `aurum-gates flake-hunt: ${stats.reruns} rerun-passed run(s) of ${stats.runs}, ${stats.tests} flaky test(s), ${stats.filed.length} new issue(s), ${stats.existing} already open, ${stats.infra} infra-only, ${stats.noReport} without reports`;
-    return { code: 0, summary, text: [...stats.filed, summary].join('\n') };
+    const lines = [...stats.filed];
+    let code = 0;
+    try {
+      if (args.includes('--init-ledger') && !args.includes('--dry-run')) {
+        const n = initLedger({ root, found: stats.found });
+        lines.push(n < 0 ? `${LEDGER_FILE} exists: left as it is.` : `${LEDGER_FILE} written with ${n} test(s).`);
+      }
+      const ledger = readLedger(root);
+      if (ledger) {
+        // The nightly is red for a flake the ledger lacks and for a ledger test past the SLO (DS-059 §4.4); report mode only says so.
+        const v = verdict({ ledger, found: stats.found, now: new Date().toISOString() });
+        const mode = existsSync(join(root, GATES_FILE)) ? modeOf(root, 'flake-hunt') : 'report';
+        lines.push(
+          ...v.unlisted.map((t) => `not in the ledger: ${t}`),
+          ...v.overdue.map((t) => `past 2 school days: ${t}`),
+        );
+        if ((v.unlisted.length || v.overdue.length) && mode !== 'report') code = EXIT_FINDINGS;
+      }
+    } catch (error) {
+      return broken(`flake-hunt ledger: ${error.message}`);
+    }
+    return { code, summary, text: [...lines, summary].join('\n') };
   }
+  if (command === 'flake-probe') return runProbe(root, argv.slice(1), { exec: runner });
   if (command === 'pr-evidence') return runEvidence(root, argv.slice(1));
   if (command !== 'run' && command !== 'tighten' && command !== 'init')
     return broken(command ? `unknown command "${command}"` : 'no command');

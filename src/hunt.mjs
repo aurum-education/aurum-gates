@@ -53,7 +53,7 @@ const merge = (xmls) => {
  */
 // `created>=since` lists runs created in the window: an older run that was rerun recently is not seen (3 days covers a PR's rerun).
 export async function hunt({ gh, repo, workflow = 'pr.yml', since, dryRun = false }) {
-  const stats = { runs: 0, reruns: 0, infra: 0, noReport: 0, tests: 0, filed: [], existing: 0 };
+  const stats = { runs: 0, reruns: 0, infra: 0, noReport: 0, tests: 0, filed: [], existing: 0, found: [] };
   const records = [];
   for (let page = 1; page <= 10; page += 1) {
     const { workflow_runs: runs } = await gh(
@@ -85,7 +85,7 @@ export async function hunt({ gh, repo, workflow = 'pr.yml', since, dryRun = fals
   }
   // Open issues dedupe by title. Closed ones in the window dedupe by title and run, so a flake filed and closed the same
   // day is not filed again for the same run the next night (a new run of it still files a new issue).
-  const open = new Set();
+  const open = new Map(); // title -> { number, created }
   const closed = new Set();
   for (const [state, extra] of [
     ['open', ''],
@@ -94,7 +94,7 @@ export async function hunt({ gh, repo, workflow = 'pr.yml', since, dryRun = fals
     for (let page = 1; ; page += 1) {
       const issues = await gh(`/repos/${repo}/issues?labels=${LABEL}&state=${state}&per_page=100&page=${page}${extra}`);
       for (const i of issues) {
-        if (state === 'open') open.add(i.title);
+        if (state === 'open') open.set(i.title, { number: i.number, created: i.created_at });
         else closed.add(`${i.title}\n${/^run: (\S+)/m.exec(i.body ?? '')?.[1]}`);
       }
       if (issues.length < 100) break;
@@ -103,12 +103,17 @@ export async function hunt({ gh, repo, workflow = 'pr.yml', since, dryRun = fals
     const t = title(r.test);
     if (open.has(t) || closed.has(`${t}\n${r.run}`)) {
       stats.existing += 1;
+      if (open.has(t) && !stats.found.some((f) => f.test === r.test))
+        stats.found.push({ test: r.test, issue: open.get(t).number, created: open.get(t).created });
       continue;
     }
-    open.add(t); // the same test on two runs files once
-    if (!dryRun)
-      await gh(`/repos/${repo}/issues`, { method: 'POST', body: { title: t, body: body(r), labels: [LABEL] } });
+    // The same test on two runs files once.
+    const made = dryRun
+      ? {}
+      : await gh(`/repos/${repo}/issues`, { method: 'POST', body: { title: t, body: body(r), labels: [LABEL] } });
+    open.set(t, { number: made.number, created: made.created_at ?? new Date().toISOString() });
     stats.filed.push(t);
+    stats.found.push({ test: r.test, issue: made.number, created: open.get(t).created });
   }
   stats.tests = new Set(records.map((r) => r.test)).size;
   return stats;
