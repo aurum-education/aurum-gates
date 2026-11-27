@@ -18,6 +18,7 @@ export function readJunit(xml) {
   const failed = new Set();
   const passed = new Set();
   for (const m of xml.matchAll(/<testcase\b([^>]*?)(\/>|>([\s\S]*?)<\/testcase>)/g)) {
+    // nosemgrep: aurum.non-literal-regexp -- `n` is one of this function's own attribute names, never report text
     const attr = (n) => unescape(new RegExp(`\\b${n}="([^"]*)"`).exec(m[1])?.[1] ?? '');
     const id = `${attr('classname')} > ${attr('name')}`;
     const body = m[3] ?? '';

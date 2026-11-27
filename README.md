@@ -20,6 +20,8 @@ pnpm's lockfile for a URL dependency, so a tag is never moved (see `CLAUDE.md`);
 | `aurum-gates run <gate> [--report]`                                              | Runs a gate of `src/gates/` in its mode from `quality/gates.json`                                                                                                                                                                       |
 | `aurum-gates tighten <gate>`                                                     | Lowers the gate's baseline to today's findings; never raises it (`pnpm gates:tighten` in a repo)                                                                                                                                        |
 | `aurum-gates baseline-guard [--base <ref>] [--report=<label>]`                   | Fails when a baseline count rises, a key is added or a mode moves backwards, unless the PR body allows it                                                                                                                               |
+| `aurum-gates run sast`                                                           | Semgrep with Aurum's own rules (see SAST below); needs `semgrep` on the PATH                                                                                                                                                            |
+| `aurum-gates sast-issues`                                                        | Nightly: opens one issue per new ERROR fingerprint (`GH_TOKEN` with issues write, `GITHUB_REPOSITORY`)                                                                                                                                  |
 | `aurum-gates pr-evidence [--all]`                                                | Posts the `pr-evidence` commit status on a PR's head SHA (see below); `--all` does every open PR                                                                                                                                        |
 | `aurum-gates flake-record --repo <r> --sha <s> --run <url> <firstDir> <lastDir>` | Step 6.156 slice 1: one JSON line per test that failed in the first attempt's JUnit reports and passed in the last (`kind: test`), or one `kind: infra` line when the failed attempt names no failed test. IDs only, never message text |
 
@@ -62,6 +64,29 @@ moved source file (git rename detection) carries its count: a rename with an equ
 
 A repo that watches more files passes a `config` (see `DEFAULT_CONFIG` in `src/guard.mjs`), as aurum-web does for its UX
 gates (DS-060 §4.5).
+
+## SAST (`sast`, assurance assessment 2026-11-27 step 2)
+
+Semgrep OSS (free, runs in the job, no service) with our own 14 rules in `sast/rules/aurum.yml`, shipped in the tag:
+`eval`, `new Function`, string timers, shell `exec`, `shell: true`, TLS verification off, HTML sinks, JWT `none` or
+unverified decode, request bodies in logs (ERROR, these block in `ratchet` and `enforce`) and `Math.random`, MD5 and
+SHA-1, RegExp from a variable, `postMessage` to `*` (WARNING: counted and shown, never block). CodeQL is not used: on a
+private repo it needs the paid GitHub Code Security add-on.
+
+- Add `"sast": { "mode": "report" }` to `quality/gates.json`, an empty `quality/baselines/sast.json` (`{}`), a
+  `.semgrepignore` for generated code, and copy `.github/workflows/sast.yml` (pin the same `SEMGREP_VERSION`). Tests,
+  e2e, fixtures and `node_modules` are skipped by the gate itself. Counts are per file and rule, shrink-only like every gate.
+- Triage a finding by fixing it, or by `// nosemgrep: <rule id> -- <reason>` on the line above; the reviewer reads the reason.
+- The nightly `sast-issues` opens one issue per fingerprint (rule, file and the normalised matched line, so a moved line
+  keeps it), at most 25 a night. A closed issue is never opened again. Issues hold rule, path and line, never code.
+  Nothing writes a PR comment.
+- `aurum.child-process-shell` and `aurum.log-request-body` match by name (`exec` imported from `child_process`, or a receiver
+  called `cp`, `child_process`, `childProcess` or `proc`; a logger called `log`, `logger` or `*Logger`). A differently named
+  receiver is missed: name it in the rule, with a fixture, when one turns up.
+- Rules are tested with `semgrep --test --config sast/rules sast/rules` (a `ruleid` and an `ok` case per rule in
+  `sast/rules/aurum.tsx`). Moving the pinned Semgrep version is its own PR.
+- Semgrep OSS matches within one file; it does not follow data across files. It is one layer, with the ESLint ban list,
+  osv-scanner and gitleaks.
 
 ## PR evidence (`pr-evidence`, step 6.153)
 

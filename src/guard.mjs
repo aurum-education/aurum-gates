@@ -170,6 +170,7 @@ export function guard({ base, head, changed = [], renames = new Map(), config = 
 /** The findings the PR body does not allow: each needs its own `baseline-raise: <label> … — <reason>` line. */
 export function unallowed(failures, body) {
   const allowed = (label) =>
+    // nosemgrep: aurum.non-literal-regexp -- the label is escaped in the same expression
     new RegExp(`^baseline-raise: ${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} — \\S`, 'm').test(body);
   return failures.filter((f) => f.allowable === false || !allowed(f.label));
 }

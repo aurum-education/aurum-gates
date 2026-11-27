@@ -71,6 +71,7 @@ export const RULES = {
   },
 };
 
+// nosemgrep: aurum.non-literal-regexp -- `re` is one of this file's own pattern strings, never PR text
 const line = (body, re) => new RegExp(re, 'm').exec(body);
 
 /** Patterns like `apps/*\/src/**\/*.{tsx,css}` as a RegExp: `**` any depth, `*` within a folder, `{a,b}` a choice. */
@@ -95,6 +96,7 @@ export function globToRegExp(glob) {
     } else if (c === ',' && depth) out += '|';
     else out += c.replace(/[.+?^$()|[\]\\]/g, '\\$&');
   }
+  // nosemgrep: aurum.non-literal-regexp -- every literal character of the glob is escaped above
   return new RegExp(`^${out}$`);
 }
 
