@@ -14,7 +14,7 @@ import { run as runGuard } from './guard.mjs';
 import { fileIssues, scan } from './sast.mjs';
 import { initBaseline, tighten } from './tighten.mjs';
 
-const USAGE = `usage: aurum-gates run <gate> | tighten <gate> | init <gate> | pr-evidence [--all] | sast-issues | flake-hunt --repo <owner/name> [--days <n>] [--workflow <file>] [--dry-run] [--init-ledger] | flake-probe [--base <ref>] [--runner vitest|playwright] [--cap <n>] | flake-record --repo <r> --sha <s> --run <url> <firstDir> <lastDir> | baseline-guard [--base <ref>] [--report=<label>] [--config <module>]`;
+const USAGE = `usage: aurum-gates run <gate> | tighten <gate> | init <gate> | pr-evidence [--all] | sast-issues | flake-hunt --repo <owner/name> [--days <n>] [--workflow <file>] [--dry-run] [--init-ledger] | flake-probe [--base <ref>] [--runner vitest|playwright] [--cap <n>] [--grep-invert <re>] | flake-record --repo <r> --sha <s> --run <url> <firstDir> <lastDir> | baseline-guard [--base <ref>] [--report=<label>] [--config <module>]`;
 
 /** Whether quality/gates.json lists the gate. A missing file or entry is false; an unreadable file still throws. */
 const hasEntry = (root, gate) => existsSync(join(root, GATES_FILE)) && Object.hasOwn(readJson(root, GATES_FILE), gate);

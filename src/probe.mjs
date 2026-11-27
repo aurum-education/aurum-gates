@@ -1,6 +1,6 @@
 // `flake-probe` (DS-059 §4.4 G3, step 6.156 slice 3): runs the test files a PR adds or changes repeatedly, so a new flake
 // stops at the PR that brings it. Vitest: 5 runs per file with `--sequence.shuffle` and a different seed each time.
-// Playwright: one run of the changed files with `--repeat-each=3 --retries=0`. Any failure fails the job, naming the
+// Playwright: one run of the changed files with `--repeat-each=3 --retries=0` (`--grep-invert <re>` leaves tagged tests out, e.g. timing ones). Any failure fails the job, naming the
 // test id and the seed (never the failure message: workspace non-negotiable 2). More than `--cap` changed files (default 8) skips with a
 // notice, the nightly covers them. The mode is `flake-probe` in quality/gates.json (report for 14 days, then enforce).
 import { spawnSync } from 'node:child_process';
@@ -63,7 +63,7 @@ export function execRunner(root) {
 }
 
 /** Failures `{ where, rule, detail }` of the probe. `exec(command, args)` returns `{ status, junit }`. */
-export function probe({ files, runner, exec, seeds }) {
+export function probe({ files, runner, exec, seeds, grepInvert }) {
   const failures = [];
   const add = (where, detail) => failures.push({ where, rule: 'fails-on-repeat', detail });
   const check = ({ status, junit }, file, label) => {
@@ -83,6 +83,7 @@ export function probe({ files, runner, exec, seeds }) {
         '--trace',
         'off',
         '--reporter=junit',
+        ...(grepInvert ? ['--grep-invert', grepInvert] : []),
         ...files,
       ]),
       files.join(' '),
@@ -131,7 +132,7 @@ export async function run(root, args, { exec } = {}) {
       console.log(`flake-probe: ${files.length} changed ${runner} test file(s).`);
       if (!files.length) return []; // Playwright with no file runs the whole suite
       const seeds = Array.from({ length: REPEATS }, () => randomInt(1, 2 ** 31));
-      return probe({ files, runner, exec: exec ?? execRunner(root), seeds });
+      return probe({ files, runner, exec: exec ?? execRunner(root), seeds, grepInvert: opt('grep-invert') });
     },
   });
 }
