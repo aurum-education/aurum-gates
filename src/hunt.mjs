@@ -64,14 +64,20 @@ export async function hunt({ gh, repo, workflow = 'pr.yml', since, dryRun = fals
       if (run.run_attempt < 2) continue;
       stats.reruns += 1;
       const { artifacts } = await gh(`/repos/${repo}/actions/runs/${run.id}/artifacts?per_page=100`);
-      const read = async (name) => {
-        const a = artifacts.find((x) => x.name === name && !x.expired);
-        return a ? merge(junitFromZip(await gh(`/repos/${repo}/actions/artifacts/${a.id}/zip`, { raw: true }))) : null;
+      // An attempt's reports: the unit report (`test-reports-attempt-<n>`) and each e2e shard's JUnit
+      // (`e2e-junit-shard-<k>-attempt-<n>`). Rerunning only the failed shards leaves the rest out of that attempt.
+      const read = async (n) => {
+        const names = artifacts.filter(
+          (x) =>
+            !x.expired &&
+            (x.name === `test-reports-attempt-${n}` || new RegExp(`^e2e-junit-shard-\\d+-attempt-${n}$`).test(x.name)),
+        );
+        const xmls = [];
+        for (const a of names)
+          xmls.push(...junitFromZip(await gh(`/repos/${repo}/actions/artifacts/${a.id}/zip`, { raw: true })));
+        return names.length ? merge(xmls) : null;
       };
-      const [first, last] = [
-        await read('test-reports-attempt-1'),
-        await read(`test-reports-attempt-${run.run_attempt}`),
-      ];
+      const [first, last] = [await read(1), await read(run.run_attempt)];
       if (!first?.files || !last?.files) {
         stats.noReport += 1;
         continue;

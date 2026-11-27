@@ -46,13 +46,15 @@ const fixed = [['a.test', 'one']];
 /** A fake GitHub: `runs` rerun-passed runs, each with the given attempt-1 and last reports; `open` issue titles. */
 function fake({ runs, open = [], created = [], closedIssues = [] }) {
   const artifacts = {};
-  const list = runs.map(([id, first, last, attempt = 2]) => {
-    artifacts[id] = [
-      { id: id * 10, name: 'test-reports-attempt-1', expired: false },
-      { id: id * 10 + 1, name: `test-reports-attempt-${attempt}`, expired: false },
-    ];
-    return { id, run_attempt: attempt, head_sha: `sha${id}`, files: [first, last] };
-  });
+  const list = runs.map(
+    ([id, first, last, attempt = 2, names = ['test-reports-attempt-1', `test-reports-attempt-${attempt}`]]) => {
+      artifacts[id] = [
+        { id: id * 10, name: names[0], expired: false },
+        { id: id * 10 + 1, name: names[1], expired: false },
+      ];
+      return { id, run_attempt: attempt, head_sha: `sha${id}`, files: [first, last] };
+    },
+  );
   return async (path, { method, body: b, raw } = {}) => {
     if (path.includes('/workflows/')) return { workflow_runs: list };
     if (path.includes('/artifacts?')) return { artifacts: artifacts[Number(path.split('/runs/')[1].split('/')[0])] };
@@ -92,6 +94,21 @@ describe('hunt', () => {
     assert.equal(created[0].title, title('a.test > one'));
     assert.deepEqual(created[0].labels, ['flaky']);
     assert.equal(stats.filed.length, 1);
+  });
+
+  it("reads each e2e shard's per-attempt JUnit, so a rerun of only the failed shard is compared", async () => {
+    const created = [];
+    const gh = fake({
+      runs: [[1, flaky, fixed, 2, ['e2e-junit-shard-3-attempt-1', 'e2e-junit-shard-3-attempt-2']]],
+      created,
+    });
+    const stats = await hunt({ gh, repo: 'o/web', since: '2026-11-24' });
+    assert.equal(stats.noReport, 0);
+    assert.equal(created.length, 1);
+    const other = fake({
+      runs: [[2, flaky, fixed, 2, ['e2e-junit-shard-3-attempt-1', 'e2e-junit-shard-3-attempt-3']]],
+    });
+    assert.equal((await hunt({ gh: other, repo: 'o/web', since: '2026-11-24' })).noReport, 1);
   });
 
   it('files nothing when an open issue has the title, and on a second night', async () => {

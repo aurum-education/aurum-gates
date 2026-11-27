@@ -87,6 +87,19 @@ describe('probe', () => {
     assert.ok(calls[0].includes(`--repeat-each=${PLAYWRIGHT_REPEATS}`) && calls[0].includes('--retries=0'));
   });
 
+  it('leaves tagged Playwright tests out with --grep-invert', () => {
+    const calls = [];
+    const exec = (command, args) => (calls.push(args), { status: 0, junit: junit(false) });
+    probe({ files: ['e2e/a.spec.ts'], runner: 'playwright', exec, seeds: [], grepInvert: '@perf|@usability' });
+    assert.deepEqual(calls[0].slice(calls[0].indexOf('--grep-invert'), calls[0].indexOf('--grep-invert') + 2), [
+      '--grep-invert',
+      '@perf|@usability',
+    ]);
+    calls.length = 0;
+    probe({ files: ['e2e/a.spec.ts'], runner: 'playwright', exec, seeds: [] });
+    assert.ok(!calls[0].includes('--grep-invert'));
+  });
+
   it('puts no report text in a failure', () => {
     const exec = () => ({ status: 1, junit: junit(true) });
     assert.ok(!JSON.stringify(probe({ files: ['a.test.ts'], runner: 'vitest', exec, seeds: [1] })).includes('SECRET'));
