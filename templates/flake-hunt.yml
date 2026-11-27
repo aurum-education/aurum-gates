@@ -1,0 +1,28 @@
+name: CI · Flake hunt
+run-name: CI · Flake hunt ${{ github.event_name }}
+# DS-059 §4.4 G3, step 6.156 slice 2. Nightly: reads this repo's recent PR runs, files one `flaky` issue per test that
+# failed then passed on rerun of the same sha (IDs only, no comments). It only reads the Actions API and writes issues, so
+# it runs on a hosted slim runner (one billed minute) and never on the pool. GitHub drops sub-daily crons; daily is enough.
+# The copy for each repo is templates/flake-hunt.yml in aurum-education/aurum-gates; keep them identical, and change
+# TAG only there.
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+permissions: {}
+jobs:
+  hunt:
+    runs-on: ubuntu-slim # ADR-0108: no Docker, 1 vCPU, short
+    timeout-minutes: 10
+    permissions:
+      actions: read # the PR runs and their report artifacts
+      issues: write # one issue per flaky test
+    steps:
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: File the flaky tests
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TAG: v1.6.0
+        run: npx --yes "https://codeload.github.com/aurum-education/aurum-gates/tar.gz/refs/tags/$TAG" flake-hunt --repo "$GITHUB_REPOSITORY" --days 3
