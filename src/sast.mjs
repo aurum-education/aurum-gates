@@ -131,9 +131,9 @@ export function fileIssues({
       '--state',
       'all',
       '--search',
-      `"[${f.fingerprint}]" in:title`,
+      `"${f.fingerprint}" in:title`,
       '--json',
-      'number',
+      'number,title',
     ]);
     if (found.status !== 0) throw new Error(`gh issue list failed for ${f.fingerprint}`);
     // Compared here, not trusted to the search: its index lags and it matches loosely.

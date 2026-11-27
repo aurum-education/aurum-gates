@@ -105,7 +105,17 @@ describe('one issue per fingerprint', () => {
     const gh = (args) => {
       calls.push(args);
       if (args[1] === 'list')
-        return { status: 0, stdout: JSON.stringify(existing.map((e) => ({ number: 1, title: `SAST x [${e}]` }))) };
+        // Like gh: only the fields asked for with --json come back.
+        return {
+          status: 0,
+          stdout: JSON.stringify(
+            existing.map((e) =>
+              Object.fromEntries(
+                args[args.indexOf('--json') + 1].split(',').map((k) => [k, k === 'title' ? `SAST x [${e}]` : 1]),
+              ),
+            ),
+          ),
+        };
       return { status: 0, stdout: '' };
     };
     return { gh, calls };
