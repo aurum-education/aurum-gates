@@ -1,0 +1,71 @@
+name: SAST · Gates static analysis
+run-name: SAST · Gates static analysis · ${{ github.event.pull_request.number && format('#{0}', github.event.pull_request.number) || github.sha }}
+
+# Assurance assessment 2026-11-27 step 2, DS-059 §4.1: Semgrep OSS with Aurum's own rules (sast/rules), run as the `sast` gate. A PR scan runs only
+# when code or rules changed and costs about a minute on a slim runner; the nightly scan covers all of main and opens one
+# issue per new ERROR fingerprint (`sast-issues`). Nothing here comments on a PR: findings are in the job log and its
+# summary. The gate's mode is in quality/gates.json (report, then ratchet, then enforce).
+# Semgrep is pinned and installed from PyPI with retries (a registry blip must not fail a run for a reason that is not
+# the code). It runs with metrics off and fetches no rules: the rules are in this repo.
+on:
+  pull_request:
+    paths: ['src/**', 'bin/**', 'sast/**', 'quality/**', 'package.json', '.semgrepignore', '.github/workflows/sast.yml']
+  schedule:
+    - cron: '41 10 * * *' # about 02:40 Pacific, outside school hours
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sast-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  SEMGREP_VERSION: '1.187.0'
+
+jobs:
+  scan:
+    runs-on: ubuntu-slim # ADR-0108: no Docker, 1 vCPU, short
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - name: Install semgrep (pinned)
+        run: |
+          python3 -m venv "$RUNNER_TEMP/sg"
+          "$RUNNER_TEMP/sg/bin/pip" install --quiet --retries 10 --timeout 60 "semgrep==$SEMGREP_VERSION"
+          echo "$RUNNER_TEMP/sg/bin" >> "$GITHUB_PATH"
+      - name: Rule fixtures (a failing and a passing case per rule)
+        run: semgrep --test --config sast/rules sast/rules
+      - name: The sast gate
+        run: node bin/aurum-gates.mjs run sast
+
+  # Nightly and manual runs only: the PR run never writes an issue.
+  issues:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-slim # ADR-0108: no Docker, 1 vCPU, short
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: write # only to open the SAST issues
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - name: Install semgrep (pinned)
+        run: |
+          python3 -m venv "$RUNNER_TEMP/sg"
+          "$RUNNER_TEMP/sg/bin/pip" install --quiet --retries 10 --timeout 60 "semgrep==$SEMGREP_VERSION"
+          echo "$RUNNER_TEMP/sg/bin" >> "$GITHUB_PATH"
+      - name: Open one issue per new ERROR fingerprint
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node bin/aurum-gates.mjs sast-issues
