@@ -24,5 +24,5 @@ jobs:
       - name: File the flaky tests
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: v1.4.0
+          TAG: v1.5.0
         run: npx --yes "https://codeload.github.com/aurum-education/aurum-gates/tar.gz/refs/tags/$TAG" flake-hunt --repo "$GITHUB_REPOSITORY" --days 3
