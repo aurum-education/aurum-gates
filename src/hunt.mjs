@@ -32,7 +32,7 @@ export function junitFromZip(zip) {
     if (!/(^|\/)junit[^/]*\.xml$/.test(name)) continue;
     const start = local + 30 + zip.readUInt16LE(local + 26) + zip.readUInt16LE(local + 28);
     const data = zip.subarray(start, start + size);
-    out.push((method === 8 ? inflateRawSync(data) : data).toString('utf8'));
+    out.push((method === 8 ? inflateRawSync(data, { maxOutputLength: 64 * 1024 * 1024 }) : data).toString('utf8'));
   }
   return out;
 }
@@ -51,6 +51,7 @@ const merge = (xmls) => {
  * `gh` is `(path, { method, body, raw }) => json | Buffer`. Returns counts and the issues filed (or, in a dry run,
  * the ones it would file). One summary, no text of any test.
  */
+// `created>=since` lists runs created in the window: an older run that was rerun recently is not seen (3 days covers a PR's rerun).
 export async function hunt({ gh, repo, workflow = 'pr.yml', since, dryRun = false }) {
   const stats = { runs: 0, reruns: 0, infra: 0, noReport: 0, tests: 0, filed: [], existing: 0 };
   const records = [];
@@ -82,15 +83,25 @@ export async function hunt({ gh, repo, workflow = 'pr.yml', since, dryRun = fals
     }
     if (runs.length < 100) break;
   }
+  // Open issues dedupe by title. Closed ones in the window dedupe by title and run, so a flake filed and closed the same
+  // day is not filed again for the same run the next night (a new run of it still files a new issue).
   const open = new Set();
-  for (let page = 1; ; page += 1) {
-    const issues = await gh(`/repos/${repo}/issues?labels=${LABEL}&state=open&per_page=100&page=${page}`);
-    issues.forEach((i) => open.add(i.title));
-    if (issues.length < 100) break;
-  }
+  const closed = new Set();
+  for (const [state, extra] of [
+    ['open', ''],
+    ['closed', `&since=${since}T00:00:00Z`],
+  ])
+    for (let page = 1; ; page += 1) {
+      const issues = await gh(`/repos/${repo}/issues?labels=${LABEL}&state=${state}&per_page=100&page=${page}${extra}`);
+      for (const i of issues) {
+        if (state === 'open') open.add(i.title);
+        else closed.add(`${i.title}\n${/^run: (\S+)/m.exec(i.body ?? '')?.[1]}`);
+      }
+      if (issues.length < 100) break;
+    }
   for (const r of records) {
     const t = title(r.test);
-    if (open.has(t)) {
+    if (open.has(t) || closed.has(`${t}\n${r.run}`)) {
       stats.existing += 1;
       continue;
     }

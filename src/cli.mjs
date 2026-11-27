@@ -54,6 +54,7 @@ export async function main(argv, { root = process.cwd(), gates = GATES, hunter }
     if (!args.includes('--repo') || !opt('repo') || !token) return broken('flake-hunt needs --repo and GITHUB_TOKEN');
     const gh = hunter ?? githubApi(token);
     const days = Number(opt('days') ?? 3);
+    if (!(days > 0)) return broken('flake-hunt --days must be a positive number');
     const since = new Date(Date.now() - days * 864e5).toISOString().slice(0, 10);
     const stats = await hunt({
       gh,

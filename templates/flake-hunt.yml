@@ -4,7 +4,7 @@ run-name: CI · Flake hunt ${{ github.event_name }}
 # failed then passed on rerun of the same sha (IDs only, no comments). It only reads the Actions API and writes issues, so
 # it runs on a hosted slim runner (one billed minute) and never on the pool. GitHub drops sub-daily crons; daily is enough.
 # The copy for each repo is templates/flake-hunt.yml in aurum-education/aurum-gates; keep them identical, and change
-# WORKFLOW (the PR workflow's file) and TAG only there.
+# TAG only there.
 on:
   schedule:
     - cron: '17 3 * * *'

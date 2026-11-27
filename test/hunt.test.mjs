@@ -44,7 +44,7 @@ const flaky = [['a.test', 'one', true]];
 const fixed = [['a.test', 'one']];
 
 /** A fake GitHub: `runs` rerun-passed runs, each with the given attempt-1 and last reports; `open` issue titles. */
-function fake({ runs, open = [], created = [] }) {
+function fake({ runs, open = [], created = [], closedIssues = [] }) {
   const artifacts = {};
   const list = runs.map(([id, first, last, attempt = 2]) => {
     artifacts[id] = [
@@ -61,6 +61,7 @@ function fake({ runs, open = [], created = [] }) {
       const run = list.find((r) => r.id === Math.floor(n / 10));
       return zip({ 'reports/junit.xml': xml(run.files[n % 10]) });
     }
+    if (path.includes('state=closed')) return closedIssues;
     if (method === 'POST') {
       created.push(b);
       return {};
@@ -99,6 +100,17 @@ describe('hunt', () => {
     const stats = await hunt({ gh, repo: 'o/web', since: '2026-11-24' });
     assert.equal(created.length, 0);
     assert.equal(stats.existing, 1);
+  });
+
+  it('does not file again a flake whose issue was closed in the window for the same run', async () => {
+    const created = [];
+    const closedIssues = [{ title: title('a.test > one'), body: 'run: https://github.com/o/web/actions/runs/1' }];
+    const gh = fake({ runs: [[1, flaky, fixed]], closedIssues, created });
+    await hunt({ gh, repo: 'o/web', since: '2026-11-24' });
+    assert.equal(created.length, 0);
+    const again = fake({ runs: [[2, flaky, fixed]], closedIssues, created });
+    await hunt({ gh: again, repo: 'o/web', since: '2026-11-24' });
+    assert.equal(created.length, 1);
   });
 
   it('counts an attempt that failed with no failed test as infra and files nothing', async () => {
@@ -141,6 +153,11 @@ describe('flake-hunt command', () => {
   it('needs --repo and a token', async () => {
     const r = await main(['flake-hunt']);
     assert.equal(r.code, 2);
+  });
+
+  it('refuses a --days that is not a positive number', async () => {
+    process.env.GITHUB_TOKEN = 'x';
+    assert.equal((await main(['flake-hunt', '--repo', 'o/web', '--days', 'abc'])).code, 2);
   });
 
   it('prints one summary line of counts', async () => {
