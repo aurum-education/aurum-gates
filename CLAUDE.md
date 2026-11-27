@@ -46,16 +46,16 @@ upward to get green (`baseline-raise: <gate> — <reason>` in the PR body, read 
 
 ## Layout
 
-| Path                                 | Contents                                                                                                                  |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
-| `bin/aurum-gates.mjs`, `src/cli.mjs` | The CLI: `run`, `tighten`, `baseline-guard`, `pr-evidence`, `flake-record`                                                |
-| `src/gate.mjs`                       | Modes, count and ceiling compare, failure message, `runGate`, `finish`                                                    |
-| `src/guard.mjs`                      | The baseline guard engine and its default watched files                                                                   |
-| `src/evidence.mjs`                   | `pr-evidence`: the PR body and review-marker rules, the commit status                                                     |
-| `src/flakes.mjs`                     | `flake-record`: tests that failed then passed between two attempts' JUnit reports, IDs only (G3, step 6.156)              |
-| `src/sast.mjs`, `sast/rules/`        | The `sast` gate (Semgrep with our own rules, `sast-issues`) and the rules with their test cases                           |
-| `src/tighten.mjs`                    | `tighten`: baselines move down only                                                                                       |
-| `src/gates/index.mjs`                | The registry of gates (each gate step adds one)                                                                           |
-| `test/`, `test/fixtures/`            | Tests (`node:test`) and the fixture repo root                                                                             |
-| `docs/adr/`                          | Repo-local ADRs                                                                                                           |
-| `.github/workflows/`                 | `pr.yml` (checks, install probe), `pr-evidence.yml` (the `pr-evidence` status), `release.yml` (tags `vX.Y.Z` from `main`) |
+| Path                                 | Contents                                                                                                                             |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `bin/aurum-gates.mjs`, `src/cli.mjs` | The CLI: `run`, `tighten`, `init`, `baseline-guard`, `pr-evidence`, `flake-record`                                                   |
+| `src/gate.mjs`                       | Modes, count and ceiling compare, failure message, `runGate`, `finish`                                                               |
+| `src/guard.mjs`                      | The baseline guard engine and its default watched files                                                                              |
+| `src/evidence.mjs`                   | `pr-evidence`: the PR body and review-marker rules, the commit status                                                                |
+| `src/flakes.mjs`                     | `flake-record`: tests that failed then passed between two attempts' JUnit reports, IDs only (G3, step 6.156)                         |
+| `src/sast.mjs`, `sast/rules/`        | The `sast` gate (Semgrep with our own rules, `sast-issues`) and the rules with their test cases                                      |
+| `src/tighten.mjs`                    | `tighten`: baselines move down only                                                                                                  |
+| `src/eslint.mjs`, `src/gates/`       | The ban-list ESLint config (`bans()`), the `lint-bans` and `suppressions` gates, and the registry of gates (each gate step adds one) |
+| `test/`, `test/fixtures/`            | Tests (`node:test`) and the fixture repo root                                                                                        |
+| `docs/adr/`                          | Repo-local ADRs                                                                                                                      |
+| `.github/workflows/`                 | `pr.yml` (checks, install probe), `pr-evidence.yml` (the `pr-evidence` status), `release.yml` (tags `vX.Y.Z` from `main`)            |
