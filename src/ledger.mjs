@@ -7,6 +7,8 @@ import { dirname, join } from 'node:path';
 
 export const LEDGER_FILE = 'quality/baselines/flaky-ledger.json';
 export const SLO_SCHOOL_DAYS = 2;
+/** An issue title is cut at 200 characters (`flaky: ` + the test id), so a long test id is known by its first 193. */
+export const idKey = (test) => test.slice(0, 200 - 'flaky: '.length);
 
 /** Weekdays after `from` up to and including `to` (ISO times). A Friday issue is 1 day old on Monday morning. */
 export function schoolDaysBetween(from, to) {
@@ -36,10 +38,11 @@ export function readLedger(root) {
  * `overdue`: a ledger test whose open issue is older than the SLO, flaking this week or not.
  */
 export function verdict({ ledger, found, open = [], now }) {
-  const unlisted = found.filter((f) => !Object.hasOwn(ledger, f.test)).map((f) => f.test);
+  const listed = new Set(Object.keys(ledger).map(idKey));
+  const unlisted = found.filter((f) => !listed.has(idKey(f.test))).map((f) => f.test);
   // The SLO reads every open issue of a ledger test, so a test that is quiet this week is still held to it.
   const overdue = open
-    .filter((i) => Object.hasOwn(ledger, i.test) && i.created && schoolDaysBetween(i.created, now) > SLO_SCHOOL_DAYS)
+    .filter((i) => listed.has(idKey(i.test)) && i.created && schoolDaysBetween(i.created, now) > SLO_SCHOOL_DAYS)
     .map((i) => i.test);
   return { unlisted: unlisted.sort(), overdue: overdue.sort() };
 }
