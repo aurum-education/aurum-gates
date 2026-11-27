@@ -25,9 +25,4 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: v1.4.0
-        run: |
-          for try in 1 2 3; do
-            npx --yes "https://codeload.github.com/aurum-education/aurum-gates/tar.gz/refs/tags/$TAG" flake-hunt --repo "$GITHUB_REPOSITORY" --days 3 && exit 0
-            sleep $((try * 20))
-          done
-          exit 1
+        run: npx --yes "https://codeload.github.com/aurum-education/aurum-gates/tar.gz/refs/tags/$TAG" flake-hunt --repo "$GITHUB_REPOSITORY" --days 3
