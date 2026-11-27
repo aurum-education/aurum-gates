@@ -81,19 +81,6 @@ export async function main(argv, { root = process.cwd(), gates = GATES, hunter }
     const summary = `aurum-gates flake-hunt: ${stats.reruns} rerun-passed run(s) of ${stats.runs}, ${stats.tests} flaky test(s), ${stats.filed.length} new issue(s), ${stats.existing} already open, ${stats.infra} infra-only, ${stats.noReport} without reports`;
     return { code: 0, summary, text: [...stats.filed, summary].join('\n') };
   }
-  if (command === 'sast-issues') {
-    try {
-      const repo = process.env.GITHUB_REPOSITORY;
-      if (!repo) throw new Error('GITHUB_REPOSITORY is not set');
-      const run =
-        process.env.GITHUB_RUN_ID &&
-        `${process.env.GITHUB_SERVER_URL}/${repo}/actions/runs/${process.env.GITHUB_RUN_ID}`;
-      const lines = fileIssues({ findings: scan(root), repo, runUrl: run });
-      const summary = `sast-issues: ${lines.filter((l) => l.startsWith('opened')).length} opened, ${lines.filter((l) => l.startsWith('deferred')).length} deferred.`;
-      return { code: 0, summary, text: [...lines, summary].join('\n') };
-    } catch (error) {
-      return broken(`sast-issues: ${error.message}`);
-    }
   }
   if (command === 'pr-evidence') return runEvidence(root, argv.slice(1));
   if (command !== 'run' && command !== 'tighten' && command !== 'init')
