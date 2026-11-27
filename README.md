@@ -77,6 +77,8 @@ gate's mode in `quality/gates.json` (`"pr-evidence": { "mode": "report" }`). It 
 - `quality/visible-paths.json` (a list of globs) names the paths a person sees; a diff touching one also needs
   `design-review: pass <sha>`. A spec change that adds a spec, changes its `status:` or touches more than 40 lines needs the
   spec ID after the SHA (`independent-review: pass <sha> DS-099`).
+- A `type: feature` PR touching a visible path also needs `guide: <audience>/<slug>` (the guide it adds or updates, such as
+  `teacher/assign-test`) or `guide: none — <reason>` (DS-049 §4.9). Fixes, refactors, docs and log PRs need none.
 - A `type: log` PR touching only `vault/50-Implementation/` and the Changelog needs no review marker.
 - `evidence-exempt: <reason>` in the body passes a hand-made PR (listed in the job summary); a bot author passes.
 - In `report` the status is green and its description lists what is missing; in `ratchet` or `enforce` it is red. No PR
