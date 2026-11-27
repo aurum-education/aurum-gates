@@ -7,7 +7,7 @@ run-name: CI · Tracker wake ${{ github.event_name }}
 # in aurum-education/isomorph-workspace; keep them identical.
 on:
   pull_request:
-    types: [opened, reopened, ready_for_review, converted_to_draft, synchronize, closed]
+    types: [opened, reopened, ready_for_review, converted_to_draft, closed] # no synchronize: a push changes no input of the derived status (DS-099 12.6)
 permissions: {}
 jobs:
   wake:
