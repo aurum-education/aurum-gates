@@ -5,10 +5,11 @@ import { pathToFileURL } from 'node:url';
 import { EXIT_BROKEN, countFailures, finish, runGate } from './gate.mjs';
 import { GATES } from './gates/index.mjs';
 import { run as runEvidence } from './evidence.mjs';
+import { flakeRecords, readDir } from './flakes.mjs';
 import { run as runGuard } from './guard.mjs';
 import { tighten } from './tighten.mjs';
 
-const USAGE = `usage: aurum-gates run <gate> | tighten <gate> | pr-evidence [--all] | baseline-guard [--base <ref>] [--report=<label>] [--config <module>]`;
+const USAGE = `usage: aurum-gates run <gate> | tighten <gate> | pr-evidence [--all] | flake-record --repo <r> --sha <s> --run <url> <firstDir> <lastDir> | baseline-guard [--base <ref>] [--report=<label>] [--config <module>]`;
 
 const broken = (message) => ({
   code: EXIT_BROKEN,
@@ -32,6 +33,18 @@ export async function main(argv, { root = process.cwd(), gates = GATES } = {}) {
     } catch (error) {
       return broken(`baseline-guard --config: ${error.message}`);
     }
+  }
+  if (command === 'flake-record') {
+    const args = argv.slice(1);
+    const opt = (n) => args[args.indexOf(`--${n}`) + 1];
+    const dirs = args.filter((a, i) => !a.startsWith('--') && !args[i - 1]?.startsWith('--'));
+    if (dirs.length !== 2 || !['repo', 'sha', 'run'].every((n) => args.includes(`--${n}`) && opt(n)))
+      return broken('flake-record needs --repo, --sha, --run and two report directories');
+    const [first, last] = dirs.map(readDir);
+    if (!last.files) return broken(`flake-record: no JUnit report under ${dirs[1]}`);
+    const records = flakeRecords({ repo: opt('repo'), sha: opt('sha'), run: opt('run'), first, last });
+    const summary = `aurum-gates flake-record: ${records.length} record(s)`;
+    return { code: 0, summary, text: [...records.map((r) => JSON.stringify(r)), summary].join('\n') };
   }
   if (command === 'pr-evidence') return runEvidence(root, argv.slice(1));
   if (command !== 'run' && command !== 'tighten')
