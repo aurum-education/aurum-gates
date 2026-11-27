@@ -34,6 +34,14 @@ describe('suppressions: the text scan', () => {
   it('ignores any inside strings and template literals', () => {
     assert.deepEqual(scanText('const s = "Pick one, any one";\nconst t = `Choose: any answer`;'), {});
   });
+  it('ignores any inside a multi-line block comment, and counts code after it closes', () => {
+    assert.deepEqual(
+      scanText('/**\n * Exactly one field: any other is a 400.\n */\nlet a: any;\n/* one\n two: any */ let b: any;'),
+      {
+        'explicit-any': 2,
+      },
+    );
+  });
   it('does not read prose that mentions a directive as a directive', () => {
     assert.deepEqual(scanText('// we never use eslint-disable or @ts-ignore here'), {});
   });

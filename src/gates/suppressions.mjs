@@ -46,11 +46,19 @@ const STRING = /'(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"|`(?:[^`\\\n]|\\.)*`/g;
 export function scanText(text) {
   const n = {};
   const add = (rule, by = 1) => (n[rule] = (n[rule] ?? 0) + by);
+  let inBlock = false; // inside a /* ... */ comment that began on an earlier line
   for (const raw of text.split('\n')) {
-    const line = raw.replace(STRING, '""');
+    let line = raw.replace(STRING, '""');
+    if (inBlock) {
+      const end = line.indexOf('*/');
+      if (end < 0) continue; // all comment: no directive starts here, and no type is written in it
+      line = ' '.repeat(end + 2) + line.slice(end + 2);
+      inBlock = false;
+    }
     const comment = /\/\/|\/\*/.exec(line);
     const code = comment ? line.slice(0, comment.index) : line;
     const note = comment ? line.slice(comment.index) : '';
+    if (comment?.[0] === '/*' && !note.includes('*/')) inBlock = true;
     // A directive starts its comment: prose that mentions one is not a directive.
     const ts = /^(?:\/\/\/?|\/\*+)\s*@ts-(?:ignore|nocheck|expect-error)\b(.*)/.exec(note);
     if (ts) {
