@@ -32,6 +32,17 @@ describe('verdict', () => {
     const found = [{ test: 'a > new', issue: 6, created: '2026-11-27T10:00:00Z' }];
     assert.deepEqual(verdict({ ledger, found, now: '2026-12-01T10:00:00Z' }), { unlisted: [], overdue: [] });
   });
+  it('knows a long test id by the first 193 characters its issue title keeps', () => {
+    const long = `a > ${'x'.repeat(300)}`;
+    const cut = long.slice(0, 193);
+    const found = [{ test: long, issue: 8, created: '2026-11-27T10:00:00Z' }];
+    assert.deepEqual(verdict({ ledger: { [cut]: { issue: 8 } }, found, now: '2026-11-27T11:00:00Z' }).unlisted, []);
+    const open = [{ test: cut, issue: 8, created: '2026-11-20T10:00:00Z' }];
+    assert.deepEqual(
+      verdict({ ledger: { [long]: { issue: 8 } }, found: [], open, now: '2026-11-27T11:00:00Z' }).overdue,
+      [cut],
+    );
+  });
   it('names a flake the ledger lacks', () => {
     const found = [{ test: 'b > fresh', issue: 9, created: '2026-11-27T10:00:00Z' }];
     assert.deepEqual(verdict({ ledger, found, now: '2026-11-27T11:00:00Z' }).unlisted, ['b > fresh']);
