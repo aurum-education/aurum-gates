@@ -3,7 +3,7 @@
 import { existsSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { EXIT_BROKEN, EXIT_FINDINGS, GATES_FILE, countFailures, finish, modeOf, runGate } from './gate.mjs';
+import { EXIT_BROKEN, EXIT_FINDINGS, GATES_FILE, countFailures, finish, modeOf, readJson, runGate } from './gate.mjs';
 import { GATES } from './gates/index.mjs';
 import { run as runEvidence } from './evidence.mjs';
 import { flakeRecords, readDir } from './flakes.mjs';
@@ -15,6 +15,9 @@ import { fileIssues, scan } from './sast.mjs';
 import { initBaseline, tighten } from './tighten.mjs';
 
 const USAGE = `usage: aurum-gates run <gate> | tighten <gate> | init <gate> | pr-evidence [--all] | sast-issues | flake-hunt --repo <owner/name> [--days <n>] [--workflow <file>] [--dry-run] [--init-ledger] | flake-probe [--base <ref>] [--runner vitest|playwright] [--cap <n>] | flake-record --repo <r> --sha <s> --run <url> <firstDir> <lastDir> | baseline-guard [--base <ref>] [--report=<label>] [--config <module>]`;
+
+/** Whether quality/gates.json lists the gate. A missing file or entry is false; an unreadable file still throws. */
+const hasEntry = (root, gate) => existsSync(join(root, GATES_FILE)) && Object.hasOwn(readJson(root, GATES_FILE), gate);
 
 const broken = (message) => ({
   code: EXIT_BROKEN,
@@ -92,8 +95,8 @@ export async function main(argv, { root = process.cwd(), gates = GATES, hunter, 
       const ledger = readLedger(root);
       if (ledger) {
         // The nightly is red for a flake the ledger lacks and for a ledger test past the SLO (DS-059 §4.4); report mode only says so.
-        const v = verdict({ ledger, found: stats.found, now: new Date().toISOString() });
-        const mode = existsSync(join(root, GATES_FILE)) ? modeOf(root, 'flake-hunt') : 'report';
+        const v = verdict({ ledger, found: stats.found, open: stats.open, now: new Date().toISOString() });
+        const mode = hasEntry(root, 'flake-hunt') ? modeOf(root, 'flake-hunt') : 'report'; // a repo that has not added the gate yet is in report
         lines.push(
           ...v.unlisted.map((t) => `not in the ledger: ${t}`),
           ...v.overdue.map((t) => `past 2 school days: ${t}`),

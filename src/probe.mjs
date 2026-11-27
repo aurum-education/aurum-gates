@@ -31,7 +31,7 @@ const git = (root, args) => {
 
 /** Test files this branch adds or changes against `base`, for one runner (Playwright owns `e2e/`, Vitest the rest). */
 export function changedTests({ root, base, runner }) {
-  return git(root, ['diff', '--name-only', '--diff-filter=AM', `${base}...HEAD`])
+  return git(root, ['diff', '--no-renames', '--name-only', '--diff-filter=AM', `${base}...HEAD`])
     .split('\n')
     .filter((f) => TEST_FILE.test(f) && /^e2e\//.test(f) === (runner === 'playwright'))
     .sort();
@@ -120,7 +120,7 @@ export async function run(root, args, { exec } = {}) {
       if (!['vitest', 'playwright'].includes(runner))
         throw new Error(`--runner must be vitest or playwright, not "${runner}"`);
       const cap = Number(opt('cap', DEFAULT_CAP));
-      if (!(cap > 0)) throw new Error('--cap must be a positive number');
+      if (!Number.isFinite(cap) || cap < 1) throw new Error('--cap must be a positive number');
       const files = changedTests({ root, base: opt('base', 'origin/main'), runner });
       if (files.length > cap) {
         console.log(
@@ -129,6 +129,7 @@ export async function run(root, args, { exec } = {}) {
         return [];
       }
       console.log(`flake-probe: ${files.length} changed ${runner} test file(s).`);
+      if (!files.length) return []; // Playwright with no file runs the whole suite
       const seeds = Array.from({ length: REPEATS }, () => randomInt(1, 2 ** 31));
       return probe({ files, runner, exec: exec ?? execRunner(root), seeds });
     },

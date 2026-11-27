@@ -43,6 +43,17 @@ describe('changedTests', () => {
   });
 });
 
+describe('changedTests renames', () => {
+  it('keeps a renamed and edited test file', () => {
+    const r = repo([]);
+    git(r, 'mv', 'old.test.ts', 'new.test.ts');
+    writeFileSync(join(r, 'new.test.ts'), '// old\n// edited\n');
+    git(r, 'add', '.');
+    git(r, 'commit', '-qm', 'rename');
+    assert.deepEqual(changedTests({ root: r, base: 'main', runner: 'vitest' }), ['new.test.ts']);
+  });
+});
+
 describe('probe', () => {
   it('runs each file once per seed under shuffle and names the seed of a failing run (AC1)', () => {
     const calls = [];
@@ -91,12 +102,30 @@ describe('flake-probe command', () => {
     assert.match(report.text, /GATE flake-probe ✗ a\.test\.ts > flaky one/);
   });
 
-  it('skips more than the cap of changed files with a notice', async () => {
+  it('skips more than the cap of changed files with a notice', async (t) => {
+    const log = t.mock.method(console, 'log', () => {});
     const files = Array.from({ length: DEFAULT_CAP + 1 }, (_, i) => `t${i}.test.ts`);
     let ran = 0;
     const r = await main(ARGS, { root: repo(files, 'enforce'), runner: () => ((ran += 1), flaky()) });
     assert.equal(r.code, 0);
     assert.equal(ran, 0);
+    assert.match(log.mock.calls[0].arguments[0], /9 changed vitest test files \(cap 8\): skipped/);
+  });
+
+  for (const runner of ['vitest', 'playwright'])
+    it(`runs nothing when no ${runner} test file changed`, async (t) => {
+      t.mock.method(console, 'log', () => {});
+      let ran = 0;
+      const r = await main([...ARGS, '--runner', runner], {
+        root: repo(['src/a.ts'], 'enforce'),
+        runner: () => ((ran += 1), flaky()),
+      });
+      assert.equal(r.code, 0);
+      assert.equal(ran, 0);
+    });
+
+  it('rejects a cap that is not a number', async () => {
+    assert.equal((await main([...ARGS, '--cap', 'x'], { root: repo(['a.test.ts']) })).code, 2);
   });
 
   it('is broken for an unknown runner or a missing gates entry', async () => {

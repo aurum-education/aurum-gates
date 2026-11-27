@@ -53,7 +53,7 @@ const merge = (xmls) => {
  */
 // `created>=since` lists runs created in the window: an older run that was rerun recently is not seen (3 days covers a PR's rerun).
 export async function hunt({ gh, repo, workflow = 'pr.yml', since, dryRun = false }) {
-  const stats = { runs: 0, reruns: 0, infra: 0, noReport: 0, tests: 0, filed: [], existing: 0, found: [] };
+  const stats = { runs: 0, reruns: 0, infra: 0, noReport: 0, tests: 0, filed: [], existing: 0, found: [], open: [] };
   const records = [];
   for (let page = 1; page <= 10; page += 1) {
     const { workflow_runs: runs } = await gh(
@@ -115,6 +115,8 @@ export async function hunt({ gh, repo, workflow = 'pr.yml', since, dryRun = fals
     stats.filed.push(t);
     stats.found.push({ test: r.test, issue: made.number, created: open.get(t).created });
   }
+  // Every open `flaky` issue, flaked in the window or not: the ledger's SLO reads these.
+  stats.open = [...open].map(([t, i]) => ({ test: t.replace(/^flaky: /, ''), issue: i.number, created: i.created }));
   stats.tests = new Set(records.map((r) => r.test)).size;
   return stats;
 }

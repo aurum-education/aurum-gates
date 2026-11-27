@@ -11,6 +11,7 @@ export const SLO_SCHOOL_DAYS = 2;
 /** Weekdays after `from` up to and including `to` (ISO times). A Friday issue is 1 day old on Monday morning. */
 export function schoolDaysBetween(from, to) {
   const end = new Date(to);
+  if (Number.isNaN(end.getTime()) || Number.isNaN(new Date(from).getTime())) throw new Error('not a date');
   let n = 0;
   for (let d = new Date(from); ;) {
     d = new Date(d.getTime() + 864e5);
@@ -30,17 +31,16 @@ export function readLedger(root) {
 }
 
 /**
- * What the nightly turns red for. `found` is the hunt's `[{ test, issue, created }]` (open flaky issues and new ones).
+ * What the nightly turns red for. `found` is the hunt's flakes in its window and `open` every open `flaky` issue, each `[{ test, issue, created }]`.
  * `unlisted`: a flaky test the ledger lacks (no path adds an entry after rollout, so it is fixed or deleted).
- * `overdue`: a ledger test whose issue is older than the SLO.
+ * `overdue`: a ledger test whose open issue is older than the SLO, flaking this week or not.
  */
-export function verdict({ ledger, found, now }) {
-  const unlisted = [];
-  const overdue = [];
-  for (const f of found) {
-    if (!Object.hasOwn(ledger, f.test)) unlisted.push(f.test);
-    else if (f.created && schoolDaysBetween(f.created, now) > SLO_SCHOOL_DAYS) overdue.push(f.test);
-  }
+export function verdict({ ledger, found, open = [], now }) {
+  const unlisted = found.filter((f) => !Object.hasOwn(ledger, f.test)).map((f) => f.test);
+  // The SLO reads every open issue of a ledger test, so a test that is quiet this week is still held to it.
+  const overdue = open
+    .filter((i) => Object.hasOwn(ledger, i.test) && i.created && schoolDaysBetween(i.created, now) > SLO_SCHOOL_DAYS)
+    .map((i) => i.test);
   return { unlisted: unlisted.sort(), overdue: overdue.sort() };
 }
 

@@ -22,6 +22,7 @@ describe('schoolDaysBetween', () => {
     assert.equal(schoolDaysBetween('2026-11-27T10:00:00Z', '2026-11-28T10:00:00Z'), 0);
     assert.equal(schoolDaysBetween('2026-11-27T10:00:00Z', '2026-11-30T10:00:00Z'), 1);
     assert.equal(schoolDaysBetween('2026-11-27T10:00:00Z', '2026-12-02T10:00:00Z'), 3);
+    assert.throws(() => schoolDaysBetween('nope', '2026-12-02T10:00:00Z'), /not a date/);
   });
 });
 
@@ -36,8 +37,8 @@ describe('verdict', () => {
     assert.deepEqual(verdict({ ledger, found, now: '2026-11-27T11:00:00Z' }).unlisted, ['b > fresh']);
   });
   it('names a ledger test whose issue is past 2 school days', () => {
-    const found = [{ test: 'a > old', issue: 5, created: '2026-11-23T10:00:00Z' }];
-    assert.deepEqual(verdict({ ledger, found, now: '2026-11-27T10:00:00Z' }).overdue, ['a > old']);
+    const open = [{ test: 'a > old', issue: 5, created: '2026-11-23T10:00:00Z' }];
+    assert.deepEqual(verdict({ ledger, found: [], open, now: '2026-11-27T10:00:00Z' }).overdue, ['a > old']);
   });
 });
 
@@ -119,6 +120,31 @@ describe('flake-hunt with a ledger', () => {
       assert.equal(out.code, code);
       assert.match(out.text, /not in the ledger: a > one/);
     }
+  });
+
+  it('is red for an old open ledger issue whose test did not flake in the window', async () => {
+    process.env.GITHUB_TOKEN = 'x';
+    const quiet = async (path) => {
+      if (path.includes('/workflows/')) return { workflow_runs: [] };
+      if (path.includes('state=open'))
+        return [{ number: 7, title: 'flaky: a > one', created_at: '2020-01-01T00:00:00Z' }];
+      return [];
+    };
+    const r = root({
+      [LEDGER_FILE]: '{"a > one":{"issue":7}}',
+      'quality/gates.json': JSON.stringify({ 'flake-hunt': { mode: 'enforce' } }),
+    });
+    const out = await main(ARGS, { root: r, hunter: quiet });
+    assert.equal(out.code, 1);
+    assert.match(out.text, /past 2 school days: a > one/);
+  });
+
+  it('treats a gates.json with no flake-hunt entry as report mode, for the first ledger run too', async () => {
+    process.env.GITHUB_TOKEN = 'x';
+    const r = root({ 'quality/gates.json': JSON.stringify({ sast: { mode: 'report' } }) });
+    const out = await main([...ARGS, '--init-ledger'], { root: r, hunter: gh(new Date().toISOString()) });
+    assert.equal(out.code, 0);
+    assert.deepEqual(readLedger(r), { 'a > one': { issue: 7 } });
   });
 
   it('is red for a ledger test past the SLO and clean inside it', async () => {
