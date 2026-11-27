@@ -81,7 +81,6 @@ export async function main(argv, { root = process.cwd(), gates = GATES, hunter }
     const summary = `aurum-gates flake-hunt: ${stats.reruns} rerun-passed run(s) of ${stats.runs}, ${stats.tests} flaky test(s), ${stats.filed.length} new issue(s), ${stats.existing} already open, ${stats.infra} infra-only, ${stats.noReport} without reports`;
     return { code: 0, summary, text: [...stats.filed, summary].join('\n') };
   }
-  }
   if (command === 'pr-evidence') return runEvidence(root, argv.slice(1));
   if (command !== 'run' && command !== 'tighten' && command !== 'init')
     return broken(command ? `unknown command "${command}"` : 'no command');
