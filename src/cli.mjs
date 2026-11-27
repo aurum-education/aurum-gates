@@ -9,9 +9,9 @@ import { flakeRecords, readDir } from './flakes.mjs';
 import { githubApi, hunt } from './hunt.mjs';
 import { run as runGuard } from './guard.mjs';
 import { fileIssues, scan } from './sast.mjs';
-import { tighten } from './tighten.mjs';
+import { initBaseline, tighten } from './tighten.mjs';
 
-const USAGE = `usage: aurum-gates run <gate> | tighten <gate> | pr-evidence [--all] | sast-issues | flake-record --repo <r> --sha <s> --run <url> <firstDir> <lastDir> | flake-hunt --repo <owner/name> [--days <n>] [--workflow <file>] [--dry-run] | baseline-guard [--base <ref>] [--report=<label>] [--config <module>]`;
+const USAGE = `usage: aurum-gates run <gate> | tighten <gate> | init <gate> | pr-evidence [--all] | sast-issues | flake-hunt --repo <owner/name> [--days <n>] [--workflow <file>] [--dry-run] | flake-record --repo <r> --sha <s> --run <url> <firstDir> <lastDir> | baseline-guard [--base <ref>] [--report=<label>] [--config <module>]`;
 
 const broken = (message) => ({
   code: EXIT_BROKEN,
@@ -48,6 +48,20 @@ export async function main(argv, { root = process.cwd(), gates = GATES, hunter }
     const summary = `aurum-gates flake-record: ${records.length} record(s)`;
     return { code: 0, summary, text: [...records.map((r) => JSON.stringify(r)), summary].join('\n') };
   }
+  if (command === 'sast-issues') {
+    try {
+      const repo = process.env.GITHUB_REPOSITORY;
+      if (!repo) throw new Error('GITHUB_REPOSITORY is not set');
+      const run =
+        process.env.GITHUB_RUN_ID &&
+        `${process.env.GITHUB_SERVER_URL}/${repo}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+      const lines = fileIssues({ findings: scan(root), repo, runUrl: run });
+      const summary = `sast-issues: ${lines.filter((l) => l.startsWith('opened')).length} opened, ${lines.filter((l) => l.startsWith('deferred')).length} deferred.`;
+      return { code: 0, summary, text: [...lines, summary].join('\n') };
+    } catch (error) {
+      return broken(`sast-issues: ${error.message}`);
+    }
+  }
   if (command === 'flake-hunt') {
     const args = argv.slice(1);
     const opt = (n) => (args.includes(`--${n}`) ? args[args.indexOf(`--${n}`) + 1] : undefined);
@@ -82,10 +96,21 @@ export async function main(argv, { root = process.cwd(), gates = GATES, hunter }
     }
   }
   if (command === 'pr-evidence') return runEvidence(root, argv.slice(1));
-  if (command !== 'run' && command !== 'tighten')
+  if (command !== 'run' && command !== 'tighten' && command !== 'init')
     return broken(command ? `unknown command "${command}"` : 'no command');
   const gate = name && Object.hasOwn(gates, name) ? gates[name] : undefined;
   if (!gate) return broken(`unknown gate "${name ?? ''}" (known: ${Object.keys(gates).join(', ') || 'none yet'})`);
+  if (command === 'init')
+    return runGate({
+      gate: name,
+      root,
+      rules: gate.rules,
+      check: async () => {
+        const wrote = initBaseline({ root, baselineFile: gate.baseline, found: await gate.find({ root }) });
+        console.log(wrote ? `${gate.baseline} written.` : `${gate.baseline} exists: left as it is (use tighten).`);
+        return [];
+      },
+    });
   if (command === 'tighten')
     return runGate({
       gate: name,

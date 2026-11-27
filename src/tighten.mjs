@@ -1,7 +1,7 @@
 // `aurum-gates tighten <gate>`: rewrites a count baseline downward only (DS-059 §4.1). It never writes a higher number
 // and never adds a key, so it cannot hide a finding; a rise is the author's to fix or to allow with `baseline-raise:`.
-import { writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { readJson } from './gate.mjs';
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -41,5 +41,26 @@ export function tighten({ root, baselineFile, found }) {
   const text = `${JSON.stringify(next, null, 2)}\n`;
   if (text === `${JSON.stringify(baseline, null, 2)}\n`) return false;
   writeFileSync(join(root, baselineFile), text);
+  return true;
+}
+
+/**
+ * Writes `baselineFile` from today's findings, only when the file does not exist: the one way a baseline starts. A file
+ * that exists is never rewritten here (it only moves down, by `tighten`). Returns whether it wrote.
+ */
+export function initBaseline({ root, baselineFile, found }) {
+  const path = join(root, baselineFile);
+  mkdirSync(dirname(path), { recursive: true });
+  const sorted = Object.fromEntries(
+    Object.entries(found)
+      .sort(([a], [b]) => (a < b ? -1 : 1))
+      .map(([where, rules]) => [where, Object.fromEntries(Object.entries(rules).sort(([a], [b]) => (a < b ? -1 : 1)))]),
+  );
+  try {
+    writeFileSync(path, `${JSON.stringify(sorted, null, 2)}\n`, { flag: 'wx' }); // wx: never overwrites
+  } catch (error) {
+    if (error.code === 'EEXIST') return false;
+    throw error;
+  }
   return true;
 }

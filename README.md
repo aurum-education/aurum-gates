@@ -18,6 +18,7 @@ pnpm's lockfile for a URL dependency, so a tag is never moved (see `CLAUDE.md`);
 | Command                                                                                   | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `aurum-gates run <gate> [--report]`                                                       | Runs a gate of `src/gates/` in its mode from `quality/gates.json`                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `aurum-gates init <gate>`                                                                 | Writes the gate's first baseline from today's findings, only when the file does not exist                                                                                                                                                                                                                                                                                                                                                                          |
 | `aurum-gates tighten <gate>`                                                              | Lowers the gate's baseline to today's findings; never raises it (`pnpm gates:tighten` in a repo)                                                                                                                                                                                                                                                                                                                                                                   |
 | `aurum-gates baseline-guard [--base <ref>] [--report=<label>]`                            | Fails when a baseline count rises, a key is added or a mode moves backwards, unless the PR body allows it                                                                                                                                                                                                                                                                                                                                                          |
 | `aurum-gates run sast`                                                                    | Semgrep with Aurum's own rules (see SAST below); needs `semgrep` on the PATH                                                                                                                                                                                                                                                                                                                                                                                       |
@@ -88,6 +89,36 @@ private repo it needs the paid GitHub Code Security add-on.
   `sast/rules/aurum.tsx`). Moving the pinned Semgrep version is its own PR.
 - Semgrep OSS matches within one file; it does not follow data across files. It is one layer, with the ESLint ban list,
   osv-scanner and gitleaks.
+
+## Strict lint and ban list (`lint-bans`, `suppressions`)
+
+Two gates, shrink-only like every count gate: `aurum-gates init <gate>` writes the first baseline (only when the file is
+absent), `run` fails on a rise or a fall, `tighten` lowers.
+
+- `lint-bans` counts the findings of `bans()` (`@jmal1/aurum-gates/eslint`): `no-eval`, `no-new-func`, `no-implied-eval`,
+  `Math.random`, `child_process` (import and `require`), and, when the repo passes the plugins, `any`, unsafe and non-literal
+  regexes (`eslint-plugin-security`) and the type-aware rules (`no-floating-promises`, `no-misused-promises`,
+  `no-unsafe-*`). The config is its own ESLint pass, every rule a warning, so it never clashes with the repo's own
+  `eslint.config.js`. The repo lists `eslint`, `typescript-eslint` and `eslint-plugin-security` itself (zero dependencies here).
+- `suppressions` is a text scan of non-test source: `any`, `@ts-ignore`/`-nocheck`/`-expect-error`, `eslint-disable`, and each
+  directive without a reason (at least 10 characters: ` -- <reason>` after an `eslint-disable`, any text after a `@ts-` directive).
+
+```js
+// eslint.bans.config.mjs
+import security from 'eslint-plugin-security';
+import tseslint from 'typescript-eslint';
+import { bans } from '@jmal1/aurum-gates/eslint';
+export default bans({
+  parser: tseslint.parser,
+  plugin: tseslint.plugin,
+  security,
+  typeAware: true,
+  allow: { 'no-restricted-imports': ['scripts/**'] }, // an allowlist; the reason goes in a comment beside it
+});
+```
+
+`package.json`: `"lint:bans": "rm -f reports/eslint-bans.json; eslint -c eslint.bans.config.mjs -f json -o reports/eslint-bans.json . ; aurum-gates run lint-bans"`
+(inline `eslint-disable` comments are ignored in this pass, so a disable cannot hide a ban; the `suppressions` gate counts them). `quality/gates.json` needs `lint-bans` and `suppressions`.
 
 ## PR evidence (`pr-evidence`, step 6.153)
 
