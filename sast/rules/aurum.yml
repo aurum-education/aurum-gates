@@ -1,0 +1,164 @@
+# Aurum's curated Semgrep rules for JavaScript and TypeScript (DS-059 §4.1). Our own and small on purpose:
+# a rule is here because a finding of it is real in an Aurum repo, and each has a failing and a passing case in
+# aurum.ts (`semgrep --test sast/rules`). Severity ERROR is what the gate blocks on once its mode is ratchet or
+# enforce; WARNING is counted and reported but never blocks (a person triages it). The allowance for every rule is
+# `// nosemgrep: <rule id> -- <reason>` on the line above, and the reviewer reads the reason.
+rules:
+  - id: aurum.no-eval
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: eval runs a string as code, so any input that reaches it is code execution. Use a parser or a lookup table.
+    pattern: eval(...)
+    metadata: { cwe: 'CWE-95', fix: 'replace eval with a parser, JSON.parse or a lookup table' }
+
+  - id: aurum.no-new-function
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: The Function constructor compiles a string to code, the same risk as eval.
+    pattern-either:
+      - pattern: new Function(...)
+      - pattern: Function(...)
+    metadata: { cwe: 'CWE-95', fix: 'write the function out, or pick one from a lookup table' }
+
+  - id: aurum.no-implied-eval
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: setTimeout and setInterval given a string run it as code.
+    pattern-either:
+      - pattern: setTimeout("...", ...)
+      - pattern: setInterval("...", ...)
+      - pattern: setTimeout(`...`, ...)
+      - pattern: setInterval(`...`, ...)
+    metadata: { cwe: 'CWE-95', fix: 'pass a function' }
+
+  - id: aurum.child-process-shell
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: exec and execSync run their argument in a shell, so a value built from input is command injection.
+    patterns:
+      - pattern-either:
+          - patterns:
+              - pattern-either:
+                  - pattern: exec($CMD, ...)
+                  - pattern: execSync($CMD, ...)
+              - pattern-inside: |
+                  import {..., $F, ...} from "$MOD";
+                  ...
+              - metavariable-regex: { metavariable: $MOD, regex: '^(node:)?child_process$' }
+          - patterns:
+              - pattern-either:
+                  - pattern: $CP.exec($CMD, ...)
+                  - pattern: $CP.execSync($CMD, ...)
+              - metavariable-regex: { metavariable: $CP, regex: '^(cp|child_process|childProcess|proc)$' }
+      - pattern-not: exec("...", ...)
+      - pattern-not: execSync("...", ...)
+      - pattern-not: $CP.exec("...", ...)
+      - pattern-not: $CP.execSync("...", ...)
+    metadata: { cwe: 'CWE-78', fix: 'use execFile or spawn with an argument list and no shell' }
+
+  - id: aurum.child-process-spawn-shell
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: A child process started with shell true runs its command line in a shell.
+    pattern-either:
+      - pattern: 'spawn($C, $A, { ..., shell: true, ... })'
+      - pattern: '$CP.spawn($C, $A, { ..., shell: true, ... })'
+      - pattern: 'spawnSync($C, $A, { ..., shell: true, ... })'
+      - pattern: '$CP.spawnSync($C, $A, { ..., shell: true, ... })'
+      - pattern: 'execFile($C, $A, { ..., shell: true, ... })'
+      - pattern: '$CP.execFile($C, $A, { ..., shell: true, ... })'
+      - pattern: 'execFileSync($C, $A, { ..., shell: true, ... })'
+      - pattern: '$CP.execFileSync($C, $A, { ..., shell: true, ... })'
+    metadata: { cwe: 'CWE-78', fix: 'drop shell: true and pass the arguments as a list' }
+
+  - id: aurum.tls-verification-off
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: Turning certificate verification off lets anyone on the path impersonate the server.
+    pattern-either:
+      - pattern: '{ ..., rejectUnauthorized: false, ... }'
+      - pattern: process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"
+    metadata: { cwe: 'CWE-295', fix: 'keep verification on; trust a private CA through its certificate instead' }
+
+  - id: aurum.dom-html-sink
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: Assigning a non-literal string to innerHTML or outerHTML, or calling document.write, is an XSS sink.
+    patterns:
+      - pattern-either:
+          - pattern: $E.innerHTML = $V
+          - pattern: $E.outerHTML = $V
+          - pattern: $E.insertAdjacentHTML($P, $V)
+          - pattern: document.write($V)
+          - pattern: document.writeln($V)
+      - pattern-not: $E.innerHTML = "..."
+      - pattern-not: $E.outerHTML = "..."
+      - pattern-not: $E.insertAdjacentHTML($P, "...")
+      - pattern-not: document.write("...")
+      - pattern-not: document.writeln("...")
+    metadata: { cwe: 'CWE-79', fix: 'set textContent, or build the nodes' }
+
+  - id: aurum.react-dangerous-html
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: dangerouslySetInnerHTML bypasses React's escaping, an XSS sink.
+    pattern: '<$EL ... dangerouslySetInnerHTML={...} ... />'
+    metadata: { cwe: 'CWE-79', fix: 'render the content as React nodes' }
+
+  - id: aurum.jwt-none-or-unverified
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: A token accepted with algorithm none, or decoded without verifying its signature, can be forged.
+    pattern-either:
+      - pattern: '{ ..., algorithm: "none", ... }'
+      - pattern: '{ ..., algorithms: [..., "none", ...], ... }'
+      - pattern: jwt.decode(...)
+      - pattern: jsonwebtoken.decode(...)
+    metadata: { cwe: 'CWE-347', fix: 'verify the signature with an explicit algorithm list' }
+
+  - id: aurum.log-request-body
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: A request or response body in a log line puts tenant content in the logs (workspace non-negotiable 2, DS-004).
+    pattern-either:
+      - pattern: console.$M(..., $R.body, ...)
+      - pattern: $L.$M(..., $R.body, ...)
+      - pattern: console.$M(..., $R.rawBody, ...)
+      - pattern: $L.$M(..., $R.rawBody, ...)
+    metadata: { cwe: 'CWE-532', fix: 'log IDs, counts and timings only' }
+
+  - id: aurum.math-random
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: Math.random is predictable. In an ID, token, nonce, key or shuffle that guards anything, use crypto.randomUUID or crypto.getRandomValues.
+    pattern: Math.random()
+    metadata:
+      { cwe: 'CWE-338', fix: 'use node:crypto or Web Crypto, or allow it with the reason (a jitter, a test seed)' }
+
+  - id: aurum.weak-hash
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: MD5 and SHA-1 are broken for integrity and signatures.
+    pattern-either:
+      - pattern: createHash("md5")
+      - pattern: createHash("sha1")
+      - pattern: $C.createHash("md5")
+      - pattern: $C.createHash("sha1")
+    metadata:
+      { cwe: 'CWE-328', fix: 'use SHA-256 or better, or allow it with the reason (a protocol that fixes the hash)' }
+
+  - id: aurum.non-literal-regexp
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: A RegExp built from a variable can be injected or can backtrack without end on input an attacker chooses.
+    patterns:
+      - pattern: new RegExp($X, ...)
+      - pattern-not: new RegExp("...", ...)
+    metadata: { cwe: 'CWE-1333', fix: 'escape the value, or use a literal pattern' }
+
+  - id: aurum.post-message-wildcard
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: postMessage with the target origin "*" delivers the message to any page that holds the window.
+    pattern: $W.postMessage($M, "*", ...)
+    metadata: { cwe: 'CWE-345', fix: 'name the exact target origin' }
