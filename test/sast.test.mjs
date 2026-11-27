@@ -105,7 +105,7 @@ describe('one issue per fingerprint', () => {
     const gh = (args) => {
       calls.push(args);
       if (args[1] === 'list')
-        return { status: 0, stdout: JSON.stringify(existing.some((e) => args[7].includes(e)) ? [{ number: 1 }] : []) };
+        return { status: 0, stdout: JSON.stringify(existing.map((e) => ({ number: 1, title: `SAST x [${e}]` }))) };
       return { status: 0, stdout: '' };
     };
     return { gh, calls };
@@ -133,6 +133,12 @@ describe('one issue per fingerprint', () => {
     const lines = fileIssues({ findings: many, repo: 'o/r', gh: fakeGh().gh });
     assert.equal(lines.filter((l) => l.startsWith('opened')).length, 25);
     assert.equal(lines.filter((l) => l.startsWith('deferred')).length, 2);
+  });
+
+  it('ignores a search hit whose title lacks the exact fingerprint', () => {
+    const { gh, calls } = fakeGh(['aaaaaaaaaaaa']);
+    fileIssues({ findings, repo: 'o/r', gh });
+    assert.ok(calls.some((c) => c[1] === 'create'));
   });
 
   it('fails loudly when gh fails', () => {

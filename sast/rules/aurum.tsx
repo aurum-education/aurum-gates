@@ -1,6 +1,6 @@
 import { execSync } from 'node:child_process';
 // Cases for aurum.yml: `ruleid` lines must be found, `ok` lines must not (`semgrep --test sast/rules`).
-declare const x: string, el: any, cp: any, jwt: any, log: any, req: any, w: any, crypto: any;
+declare const x: string, schema: any, res: any, el: any, cp: any, jwt: any, log: any, req: any, w: any, crypto: any;
 
 // ruleid: aurum.no-eval
 eval(x);
@@ -61,8 +61,16 @@ jwt.verify(x, 'k', { algorithms: ['RS256'] });
 console.log('got', req.body);
 // ruleid: aurum.log-request-body
 log.info(req.body);
+// ruleid: aurum.log-request-body
+this.logger.warn('bad', res.body);
 // ok: aurum.log-request-body
 log.info('got', req.id);
+// ok: aurum.log-request-body
+const parsed = schema.parse(req.body);
+// ok: aurum.log-request-body
+res.send(req.body);
+// ok: aurum.log-request-body
+logger.info('size', req.body.length);
 
 // ruleid: aurum.math-random
 const r = Math.random();

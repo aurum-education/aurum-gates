@@ -1,6 +1,6 @@
 # Aurum's curated Semgrep rules for JavaScript and TypeScript (DS-059 §4.1). Our own and small on purpose:
 # a rule is here because a finding of it is real in an Aurum repo, and each has a failing and a passing case in
-# aurum.ts (`semgrep --test sast/rules`). Severity ERROR is what the gate blocks on once its mode is ratchet or
+# aurum.tsx (`semgrep --test sast/rules`). Severity ERROR is what the gate blocks on once its mode is ratchet or
 # enforce; WARNING is counted and reported but never blocks (a person triages it). The allowance for every rule is
 # `// nosemgrep: <rule id> -- <reason>` on the line above, and the reviewer reads the reason.
 rules:
@@ -120,11 +120,12 @@ rules:
     languages: [javascript, typescript]
     severity: ERROR
     message: A request or response body in a log line puts tenant content in the logs (workspace non-negotiable 2, DS-004).
-    pattern-either:
-      - pattern: console.$M(..., $R.body, ...)
-      - pattern: $L.$M(..., $R.body, ...)
-      - pattern: console.$M(..., $R.rawBody, ...)
-      - pattern: $L.$M(..., $R.rawBody, ...)
+    patterns:
+      - pattern-either:
+          - pattern: $L.$M(..., $R.body, ...)
+          - pattern: $L.$M(..., $R.rawBody, ...)
+      - metavariable-regex: { metavariable: $L, regex: '^(console|(.*\.)?(log|logger|Log|Logger|.*Logger))$' }
+      - metavariable-regex: { metavariable: $M, regex: '^(log|info|warn|warning|error|debug|trace|fatal)$' }
     metadata: { cwe: 'CWE-532', fix: 'log IDs, counts and timings only' }
 
   - id: aurum.math-random

@@ -136,7 +136,8 @@ export function fileIssues({
       'number',
     ]);
     if (found.status !== 0) throw new Error(`gh issue list failed for ${f.fingerprint}`);
-    if (JSON.parse(found.stdout || '[]').length) continue;
+    // Compared here, not trusted to the search: its index lags and it matches loosely.
+    if (JSON.parse(found.stdout || '[]').some((i) => i.title.includes(`[${f.fingerprint}]`))) continue;
     if (opened >= MAX_NEW_ISSUES) {
       lines.push(`deferred ${f.fingerprint}`);
       continue;

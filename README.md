@@ -80,6 +80,9 @@ private repo it needs the paid GitHub Code Security add-on.
 - The nightly `sast-issues` opens one issue per fingerprint (rule, file and the normalised matched line, so a moved line
   keeps it), at most 25 a night. A closed issue is never opened again. Issues hold rule, path and line, never code.
   Nothing writes a PR comment.
+- `aurum.child-process-shell` and `aurum.log-request-body` match by name (`exec` imported from `child_process`, or a receiver
+  called `cp`, `child_process`, `childProcess` or `proc`; a logger called `log`, `logger` or `*Logger`). A differently named
+  receiver is missed: name it in the rule, with a fixture, when one turns up.
 - Rules are tested with `semgrep --test --config sast/rules sast/rules` (a `ruleid` and an `ok` case per rule in
   `sast/rules/aurum.tsx`). Moving the pinned Semgrep version is its own PR.
 - Semgrep OSS matches within one file; it does not follow data across files. It is one layer, with the ESLint ban list,
