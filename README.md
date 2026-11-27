@@ -15,12 +15,13 @@ pnpm's lockfile for a URL dependency, so a tag is never moved (see `CLAUDE.md`);
 
 ## Use
 
-| Command                                                        | What it does                                                                                              |
-| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `aurum-gates run <gate> [--report]`                            | Runs a gate of `src/gates/` in its mode from `quality/gates.json`                                         |
-| `aurum-gates tighten <gate>`                                   | Lowers the gate's baseline to today's findings; never raises it (`pnpm gates:tighten` in a repo)          |
-| `aurum-gates baseline-guard [--base <ref>] [--report=<label>]` | Fails when a baseline count rises, a key is added or a mode moves backwards, unless the PR body allows it |
-| `aurum-gates pr-evidence [--all]`                              | Posts the `pr-evidence` commit status on a PR's head SHA (see below); `--all` does every open PR          |
+| Command                                                                          | What it does                                                                                                                                                                                                                            |
+| -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `aurum-gates run <gate> [--report]`                                              | Runs a gate of `src/gates/` in its mode from `quality/gates.json`                                                                                                                                                                       |
+| `aurum-gates tighten <gate>`                                                     | Lowers the gate's baseline to today's findings; never raises it (`pnpm gates:tighten` in a repo)                                                                                                                                        |
+| `aurum-gates baseline-guard [--base <ref>] [--report=<label>]`                   | Fails when a baseline count rises, a key is added or a mode moves backwards, unless the PR body allows it                                                                                                                               |
+| `aurum-gates pr-evidence [--all]`                                                | Posts the `pr-evidence` commit status on a PR's head SHA (see below); `--all` does every open PR                                                                                                                                        |
+| `aurum-gates flake-record --repo <r> --sha <s> --run <url> <firstDir> <lastDir>` | Step 6.156 slice 1: one JSON line per test that failed in the first attempt's JUnit reports and passed in the last (`kind: test`), or one `kind: infra` line when the failed attempt names no failed test. IDs only, never message text |
 
 Exit codes: 0 clean (findings in `report` mode included), 1 findings, 2 the gate could not run (bad command, crash,
 missing or broken file; every mode).
