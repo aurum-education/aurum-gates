@@ -62,6 +62,7 @@ describe('honest-tests: the canonical rules', () => {
   });
   it('does not flag what is not an outcome set', () => {
     for (const code of [
+      "expect([...objects.values()].filter((o) => ['a', 'b'].inc" + 'ludes(o.kind)).length).toBe(0);',
       'expect([200, 404]).not.to' + 'Contain(res.status);',
       'expect(list).to' + 'Contain(1);',
       "expect(items.every((c) => c.kind === 'a' || c.kind === 'b')).toBe(true);",
@@ -84,6 +85,11 @@ describe('honest-tests: the canonical rules', () => {
     assert.deepEqual(hits(`const a = 1; // spec: DS-002 §4\n${outcomes}`), { 'outcome-set': 1 });
     assert.deepEqual(hits(`${spec}\n\n${outcomes}`), { 'outcome-set': 1 });
     assert.deepEqual(hits(`${spec}\n${force}`), { 'forced-interaction': 1 });
+    assert.deepEqual(
+      hits(`// honest-tests: a reason
+${force}`),
+      { 'forced-interaction': 1 },
+    );
     assert.deepEqual(hits(`// honest-tests: a reason\n${outcomes}`), { 'outcome-set': 1 });
   });
   it('does not scan a file that is not a test', () => {
@@ -152,6 +158,21 @@ describe('honest-tests: the command', () => {
     const result = await main(['run', 'honest-tests'], { root });
     assert.equal(result.code, 1);
     assert.match(result.text, /GATE honest-tests ✗ b\.test\.ts {2}wait-for-timeout/);
+  });
+  it('exits 0 in report mode with an enforced rule hit (a repo whose fix step has not merged)', async () => {
+    const rep = mkdtempSync(join(tmpdir(), 'gates-honest-report-'));
+    mkdirSync(join(rep, 'quality/baselines'), { recursive: true });
+    writeFileSync(join(rep, 'quality/gates.json'), JSON.stringify({ 'honest-tests': { mode: 'report' } }));
+    writeFileSync(join(rep, 'quality/baselines/honest-tests.json'), '{}');
+    writeFileSync(
+      join(rep, 'a.test.ts'),
+      `${wait}
+`,
+    );
+    const result = await main(['run', 'honest-tests'], { root: rep });
+    assert.equal(result.code, 0);
+    assert.match(result.text, /wait-for-timeout/);
+    rmSync(rep, { recursive: true, force: true });
   });
   it('is a broken gate, not a pass, when no test file exists', async () => {
     const empty = mkdtempSync(join(tmpdir(), 'gates-honest-empty-'));
