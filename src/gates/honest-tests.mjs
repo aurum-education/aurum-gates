@@ -100,7 +100,10 @@ const FILE_RULES = [
     /^\s*\}\s*,\s*\d[\d_]{3,}\s*\)\s*;?\s*$|\b(?:it|test)(?:\.\w+)*\(\s*(?:'[^'\n]*'|"[^"\n]*"|`[^`\n]*`)\s*,\s*\{\s*timeout\s*:\s*\d|\btest\.setTimeout\s*\(|\bsetConfig\(\s*\{[^}]*testTimeout/gm,
   ),
   // Retries set inside a test file: test.describe.configure({ retries: N }) or an options object { retry: N }.
-  rule('retry-config', /\.configure\(\s*\{[^}]*\bretr(?:y|ies)\s*:\s*[1-9]|\{\s*retry\s*:\s*[1-9]/g),
+  rule(
+    'retry-config',
+    /\.configure\(\s*\{[^}]*\bretr(?:y|ies)\s*:\s*[1-9]|\b(?:it|test)(?:\.\w+)*\(\s*(?:'[^'\n]*'|"[^"\n]*"|`[^`\n]*`)\s*,\s*\{\s*retry\s*:\s*[1-9]/g,
+  ),
 ];
 // shortcut: a config timeout is counted, not compared with a recorded value; the baseline holds today's count and shrinks.
 const CONFIG_RULES = [

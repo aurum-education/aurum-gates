@@ -125,6 +125,7 @@ describe('honest-tests: the new rules', () => {
     assert.deepEqual(hits('test.describe.configure({ mode: "serial" });'), {});
     assert.deepEqual(hits("it('a', { re" + 'try: 2 }, () => {});'), { 'retry-config': 1 });
     assert.deepEqual(hits("it('a', { retry: 0 }, () => {});"), {});
+    assert.deepEqual(hits('expect(opts).toEqual({ re' + 'try: 1 });'), {});
   });
   it('flags a config timeout and retries', () => {
     const c = (text) => hits(text, 'vitest.config.ts');
