@@ -1,6 +1,6 @@
 {
   "name": "@jmal1/aurum-gates",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "description": "Aurum quality gate mechanics: modes, shrink-only baselines, the failure message and the baseline guard (DS-059 §4.1).",
   "license": "UNLICENSED",
   "type": "module",
@@ -32,7 +32,7 @@
     "test:rules": "semgrep --test --config sast/rules sast/rules",
     "format:check": "prettier --check .",
     "check:no-skips": "node scripts/check-no-skips.mjs",
-    "check:honest-tests": "node scripts/check-honest-tests.mjs"
+    "check:honest-tests": "node bin/aurum-gates.mjs run honest-tests"
   },
   "devDependencies": {
     "prettier": "3.9.10"
