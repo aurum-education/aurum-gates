@@ -1,7 +1,7 @@
 // Tests for `regression-proof` (step 6.154): AC1 fixtures (pass, import error, timeout, helper overlay), the modes.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
@@ -19,6 +19,7 @@ function repo(mode = 'report') {
   git(r, 'config', 'user.name', 't');
   put(r, 'quality/gates.json', JSON.stringify({ 'regression-proof': { mode } }));
   put(r, 'src/a.ts', 'broken\n');
+  put(r, 'src/gone.ts', 'old\n');
   git(r, 'add', '.');
   git(r, 'commit', '-qm', 'base');
   git(r, 'checkout', '-q', '-b', 'pr');
@@ -26,6 +27,8 @@ function repo(mode = 'report') {
   put(r, 'src/b.ts', 'new source\n');
   put(r, 'test/helper.ts', 'helper\n');
   put(r, 'src/a.test.ts', 'test\n');
+  put(r, 'src/__snapshots__/a.snap', 'snap\n');
+  git(r, 'rm', '-q', 'src/gone.ts');
   git(r, 'add', '.');
   git(r, 'commit', '-qm', 'pr');
   return r;
@@ -58,6 +61,11 @@ describe('classify', () => {
     assert.equal(classify('playwright', playwright('passed')), 'passed');
     assert.equal(classify('playwright', playwright('failed', '\u001b[2mexpect(\u001b[22mlocator)')), 'assertion');
     assert.equal(classify('playwright', playwright('failed', 'Error: expect(received).toBe(expected)')), 'assertion');
+    // A web-first assertion ends with "Timeout: 5000ms" but is still an assertion failure.
+    assert.equal(
+      classify('playwright', playwright('failed', 'Error: expect(locator).toBeVisible() failed\n\nTimeout: 5000ms')),
+      'assertion',
+    );
     assert.equal(classify('playwright', playwright('timedOut', 'Test timeout of 30000ms exceeded.')), 'timeout');
     assert.equal(classify('playwright', playwright('failed', 'Error: page.goto: net::ERR')), 'error');
   });
@@ -78,10 +86,14 @@ describe('regression-proof command', () => {
     (base, head, seen = []) =>
     (...call) => {
       const repoDir = process.cwd();
+      const read = (f) => (existsSync(join(repoDir, f)) ? readFileSync(join(repoDir, f), 'utf8') : null);
       seen.push({
         call,
         src: existsSync(join(repoDir, 'src/b.ts')),
         helper: existsSync(join(repoDir, 'test/helper.ts')),
+        fix: read('src/a.ts'),
+        gone: read('src/gone.ts'),
+        snap: read('src/__snapshots__/a.snap'),
       });
       return { status: 0, report: seen.length === 1 ? base : head };
     };
@@ -97,18 +109,54 @@ describe('regression-proof command', () => {
 
   it('passes a test that fails with an assertion on the base and passes on the head, keeping the helper', async () => {
     const seen = [];
-    const result = await inRepo(
-      repo('enforce'),
-      runner(vitest('failed', 'AssertionError: no'), vitest('passed'), seen),
-    );
+    const dir = repo('enforce');
+    const result = await inRepo(dir, runner(vitest('failed', 'AssertionError: no'), vitest('passed'), seen));
     assert.equal(result.code, 0, result.text);
     assert.deepEqual(
-      seen.map((s) => [s.src, s.helper]),
+      seen.map((s) => [s.src, s.helper, s.fix, s.gone, s.snap]),
       [
-        [false, true],
-        [true, true],
+        [false, true, 'broken\n', 'old\n', 'snap\n'], // source undone (changed, added, deleted); helper and snapshot kept
+        [true, true, 'fixed\n', null, 'snap\n'], // head restored
       ],
-    ); // source undone, helper kept, head restored
+    );
+    assert.equal(spawnSync('git', ['status', '--porcelain'], { cwd: dir }).stdout.toString(), '');
+  });
+
+  it('judges one test: two Vitest matches are not proof', () => {
+    const two = JSON.stringify({
+      testResults: [
+        {
+          status: 'failed',
+          assertionResults: [
+            { status: 'passed', failureMessages: [] },
+            { status: 'failed', failureMessages: ['AssertionError: other test'] },
+          ],
+        },
+      ],
+    });
+    assert.equal(classify('vitest', two), 'none');
+  });
+
+  it('exits 2 when the named test is not a file the PR changes', async () => {
+    const r = await inRepo(repo('enforce'), runner('', ''), [
+      'regression-proof',
+      '--base',
+      'main',
+      '--test',
+      'src/x.test.ts::y',
+    ]);
+    assert.equal(r.code, 2);
+  });
+
+  it('takes ./ in the named path', async () => {
+    const r = await inRepo(repo('enforce'), runner(vitest('failed', 'AssertionError: no'), vitest('passed')), [
+      'regression-proof',
+      '--base',
+      'main',
+      '--test',
+      './src/a.test.ts::it works',
+    ]);
+    assert.equal(r.code, 0, r.text);
   });
 
   it('rejects a test that passes on the base', async () => {
@@ -134,6 +182,7 @@ describe('regression-proof command', () => {
       runner(vitest('failed', 'AssertionError: x'), vitest('failed', 'AssertionError: x')),
     );
     assert.match(r.text, /fails-on-head/);
+    assert.equal(r.code, 1);
   });
 
   it('only reports in report mode, and puts no failure text in the output', async () => {

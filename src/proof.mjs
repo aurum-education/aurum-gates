@@ -24,9 +24,10 @@ export const RULES = {
 };
 
 /** Paths whose changes are kept on the base so a fix that adds a helper its test needs still runs (DS-059 §4.3 step 3). */
-export const SUPPORT = /(^|\/)(test|tests|__tests__|__mocks__|__fixtures__|fixtures|mocks|test-support|e2e)\//;
+export const SUPPORT =
+  /(^|\/)(test|tests|__tests__|__mocks__|__fixtures__|__snapshots__|fixtures|mocks|test-support|e2e)\/|-snapshots\/|\.snap$|\.(?:test|spec)\.[cm]?[jt]sx?$/;
 const ANSI = /\u001b\[[0-9;]*m/g; // eslint-disable-line no-control-regex -- colour codes in runner messages
-const TIMEOUT = /timed? ?out/i;
+const TIMEOUT_MS = 10 * 60 * 1000;
 
 /** `<path>::<name>` from the PR's regression-test line, or `{ none }` for `none — <reason>`. */
 export function parseTest(text) {
@@ -67,13 +68,14 @@ export function classify(runner, text) {
     if ((report.errors ?? []).length && !tests.length) return 'error';
   }
   const ran = tests.filter((t) => !['skipped', 'pending', 'todo', 'disabled'].includes(t.status));
-  if (!ran.length) return 'none';
+  // One named test (Playwright repeats it per project); two Vitest matches would let another test supply the proof.
+  if (!ran.length || (runner === 'vitest' && ran.length > 1)) return 'none';
   const bad = ran.find((t) => !['passed', 'pass'].includes(t.status));
   if (!bad) return 'passed';
   const message = bad.message.replace(ANSI, '');
-  if (bad.status === 'timedOut' || TIMEOUT.test(message.slice(0, 120))) return 'timeout';
-  // Vitest: `AssertionError: …`; Playwright: `Error: expect(received)…`.
-  return /^(?:Error: )?expect\(|^AssertionError\b/.test(message) ? 'assertion' : 'error';
+  // Vitest: `AssertionError: …`; Playwright: `Error: expect(locator)…`, which may end in "Timeout: 5000ms": still an assertion.
+  if (/^(?:Error: )?expect\(|^AssertionError\b/.test(message)) return 'assertion';
+  return bad.status === 'timedOut' || /^Error: Test timed out/.test(message) ? 'timeout' : 'error';
 }
 
 const git = (root, args) => {
@@ -88,6 +90,7 @@ export function changes({ root, base, test }) {
     .split('\n')
     .filter(Boolean)
     .map((l) => ({ status: l[0], path: l.slice(1).trim() }));
+  if (!files.some((f) => f.path === test)) throw new Error(`the named test "${test}" is not a file this PR changes`);
   const keep = (f) => f.path === test || SUPPORT.test(f.path);
   return { revert: files.filter((f) => !keep(f)), kept: files.filter(keep) };
 }
@@ -108,15 +111,28 @@ export function execRunner(root) {
             'run',
             path,
             '-t',
-            escaped(name),
+            `${escaped(name)}$`,
             '--coverage.enabled=false',
             '--reporter=json',
             `--outputFile.json=${out}`,
           ]
-        : ['exec', 'playwright', 'test', path, '-g', escaped(name), '--retries=0', '--trace', 'off', '--reporter=json'];
+        : [
+            'exec',
+            'playwright',
+            'test',
+            path,
+            '-g',
+            `${escaped(name)}$`,
+            '--retries=0',
+            '--trace',
+            'off',
+            '--reporter=json',
+          ];
     const r = spawnSync('pnpm', args, {
       cwd: root,
       stdio: 'ignore',
+      timeout: TIMEOUT_MS, // a hung base run (the missing fix leaves a promise pending) must not eat the job
+      killSignal: 'SIGKILL',
       env: { ...process.env, PLAYWRIGHT_JSON_OUTPUT_NAME: out, PLAYWRIGHT_JSON_OUTPUT_FILE: out },
     });
     let report;
@@ -126,7 +142,7 @@ export function execRunner(root) {
       /* no report: classified as an error */
     }
     rmSync(dir, { recursive: true, force: true });
-    return { status: r.status, report };
+    return { status: r.status, report, timedOut: r.error?.code === 'ETIMEDOUT' };
   };
 }
 
@@ -145,9 +161,10 @@ function onBase({ root, base, revert }, fn) {
 
 /** Failures `{ where, rule, detail }`. `exec(runner, path, name)` returns `{ status, report }`. */
 export function prove({ root, base, runner, test, exec }) {
+  test = { ...test, path: test.path.replace(/^\.\//, '') };
   const where = `${test.path}::${test.name}`;
   const { revert } = changes({ root, base, test: test.path });
-  const outcome = (r) => (r.report ? classify(runner, r.report) : 'error');
+  const outcome = (r) => (r.timedOut ? 'timeout' : r.report ? classify(runner, r.report) : 'error');
   const onBaseOutcome = onBase({ root, base, revert }, () => outcome(exec(runner, test.path, test.name)));
   const failures = [];
   if (onBaseOutcome === 'passed') failures.push({ where, rule: 'passes-on-base', detail: 'it passes on the base' });
