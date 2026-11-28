@@ -10,11 +10,12 @@ import { flakeRecords, readDir } from './flakes.mjs';
 import { githubApi, hunt } from './hunt.mjs';
 import { LEDGER_FILE, initLedger, readLedger, verdict } from './ledger.mjs';
 import { run as runProbe } from './probe.mjs';
+import { run as runProof } from './proof.mjs';
 import { run as runGuard } from './guard.mjs';
 import { fileIssues, scan } from './sast.mjs';
 import { initBaseline, tighten } from './tighten.mjs';
 
-const USAGE = `usage: aurum-gates run <gate> | tighten <gate> | init <gate> | pr-evidence [--all] | sast-issues | flake-hunt --repo <owner/name> [--days <n>] [--workflow <file>] [--dry-run] [--init-ledger] | flake-probe [--base <ref>] [--runner vitest|playwright] [--cap <n>] [--grep-invert <re>] | flake-record --repo <r> --sha <s> --run <url> <firstDir> <lastDir> | baseline-guard [--base <ref>] [--report=<label>] [--config <module>]`;
+const USAGE = `usage: aurum-gates run <gate> | tighten <gate> | init <gate> | pr-evidence [--all] | sast-issues | flake-hunt --repo <owner/name> [--days <n>] [--workflow <file>] [--dry-run] [--init-ledger] | regression-proof --test <path>::<name> [--base <ref>] [--runner vitest|playwright] | flake-probe [--base <ref>] [--runner vitest|playwright] [--cap <n>] [--grep-invert <re>] | flake-record --repo <r> --sha <s> --run <url> <firstDir> <lastDir> | baseline-guard [--base <ref>] [--report=<label>] [--config <module>]`;
 
 /** Whether quality/gates.json lists the gate. A missing file or entry is false; an unreadable file still throws. */
 const hasEntry = (root, gate) => existsSync(join(root, GATES_FILE)) && Object.hasOwn(readJson(root, GATES_FILE), gate);
@@ -109,6 +110,7 @@ export async function main(argv, { root = process.cwd(), gates = GATES, hunter, 
     return { code, summary, text: [...lines, summary].join('\n') };
   }
   if (command === 'flake-probe') return runProbe(root, argv.slice(1), { exec: runner });
+  if (command === 'regression-proof') return runProof(root, argv.slice(1), { exec: runner });
   if (command === 'pr-evidence') return runEvidence(root, argv.slice(1));
   if (command !== 'run' && command !== 'tighten' && command !== 'init')
     return broken(command ? `unknown command "${command}"` : 'no command');
