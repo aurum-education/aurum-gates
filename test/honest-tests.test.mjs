@@ -85,6 +85,11 @@ describe('honest-tests: the canonical rules', () => {
     assert.deepEqual(hits(`const a = 1; // spec: DS-002 §4\n${outcomes}`), { 'outcome-set': 1 });
     assert.deepEqual(hits(`${spec}\n\n${outcomes}`), { 'outcome-set': 1 });
     assert.deepEqual(hits(`${spec}\n${force}`), { 'forced-interaction': 1 });
+    assert.deepEqual(
+      hits(`// honest-tests: a reason
+${force}`),
+      { 'forced-interaction': 1 },
+    );
     assert.deepEqual(hits(`// honest-tests: a reason\n${outcomes}`), { 'outcome-set': 1 });
   });
   it('does not scan a file that is not a test', () => {
