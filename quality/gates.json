@@ -4,5 +4,8 @@
   },
   "sast": {
     "mode": "report"
+  },
+  "honest-tests": {
+    "mode": "enforce"
   }
 }

@@ -121,6 +121,15 @@ export default bans({
 `package.json`: `"lint:bans": "rm -f reports/eslint-bans.json; eslint -c eslint.bans.config.mjs -f json -o reports/eslint-bans.json . ; aurum-gates run lint-bans"`
 (inline `eslint-disable` comments are ignored in this pass, so a disable cannot hide a ban; the `suppressions` gate counts them). `quality/gates.json` needs `lint-bans` and `suppressions`.
 
+## Truthful tests (`honest-tests`, G1, step 6.152)
+
+One gate replaces the `scripts/check-honest-tests.mjs` copy of every repo: `"check:honest-tests": "aurum-gates run honest-tests"`.
+It scans test files (`*.test.*`, `*.spec.*`, `e2e/`, `test/`, `tests/`, `__tests__/`) and the Vitest and Playwright config files.
+Rules that fail in the repo's mode: `wait-for-timeout`, `real-time-wait`, `forced-interaction`, `outcome-set` and `open-status`
+(the last two allowed by `// spec: <ID> �<n>` on the line above). Report-only rules (shown, never failing, until the repo ratchets
+them): `bare-tick`, `microtask-or-frame-wait`, `raised-timeout`, `retry-config`. Findings are counted per file and rule. A repo with
+no test file is a broken gate. `loosened-threshold` needs the diff and is not built yet.
+
 ## PR evidence (`pr-evidence`, step 6.153)
 
 Checks a PR's body and review markers and posts the commit status `pr-evidence` on its head SHA (DS-059 §4.8). It needs
