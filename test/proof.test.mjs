@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { main } from '../src/cli.mjs';
-import { classify, parseTest } from '../src/proof.mjs';
+import { classify, escaped, parseTest } from '../src/proof.mjs';
 
 const git = (cwd, ...args) => assert.equal(spawnSync('git', args, { cwd }).status, 0);
 const put = (r, f, text) => (mkdirSync(join(r, f, '..'), { recursive: true }), writeFileSync(join(r, f), text));
@@ -156,5 +156,12 @@ describe('regression-proof command', () => {
     put(dirty, 'x.txt', 'x');
     assert.equal((await inRepo(dirty, runner('', ''))).code, 2);
     assert.equal((await inRepo(repo('enforce'), runner('', ''), ['regression-proof'])).code, 2);
+  });
+});
+
+describe('escaped', () => {
+  it('makes a test name match itself as a regular expression', () => {
+    for (const name of ['adds (1) item [x]', 'a.b*c', 'cost $5 | tax']) assert.ok(new RegExp(escaped(name)).test(name));
+    assert.ok(!new RegExp(escaped('a.b')).test('axb'));
   });
 });

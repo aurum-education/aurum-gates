@@ -92,6 +92,9 @@ export function changes({ root, base, test }) {
   return { revert: files.filter((f) => !keep(f)), kept: files.filter(keep) };
 }
 
+/** `-t` and `-g` take a regular expression: a name with brackets or a dot must match itself. */
+export const escaped = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 /** The real runner: runs the named test and returns `{ status, report }` (the JSON text, or undefined). */
 export function execRunner(root) {
   return (runner, path, name) => {
@@ -105,12 +108,12 @@ export function execRunner(root) {
             'run',
             path,
             '-t',
-            name,
+            escaped(name),
             '--coverage.enabled=false',
             '--reporter=json',
             `--outputFile.json=${out}`,
           ]
-        : ['exec', 'playwright', 'test', path, '-g', name, '--retries=0', '--trace', 'off', '--reporter=json'];
+        : ['exec', 'playwright', 'test', path, '-g', escaped(name), '--retries=0', '--trace', 'off', '--reporter=json'];
     const r = spawnSync('pnpm', args, {
       cwd: root,
       stdio: 'ignore',
