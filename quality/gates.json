@@ -6,6 +6,6 @@
     "mode": "report"
   },
   "honest-tests": {
-    "mode": "ratchet"
+    "mode": "enforce"
   }
 }

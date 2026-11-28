@@ -93,17 +93,20 @@ const FILE_RULES = [
     'microtask-or-frame-wait',
     /\bsetImmediate\s*\(|\bqueueMicrotask\s*\(|\bprocess\.nextTick\s*\(|\brequestAnimationFrame\s*\(/g,
   ),
-  // A test-level timeout: the last argument of it/test (`}, 30_000);`), `{ timeout: N }`, test.setTimeout, vi.setConfig.
+  // A test-level timeout: the last argument of it/test (`}, 30_000);`, four digits or more), an it/test options object
+  // `{ timeout: N }`, test.setTimeout, vi.setConfig. A timeout on one assertion or action is not a test-level timeout.
   rule(
     'raised-timeout',
-    /^\s*\}\s*,\s*\d[\d_]*\s*\)\s*;?\s*$|\{\s*timeout\s*:\s*\d|\btest\.setTimeout\s*\(|\bsetConfig\(\s*\{[^}]*testTimeout/gm,
+    /^\s*\}\s*,\s*\d[\d_]{3,}\s*\)\s*;?\s*$|\b(?:it|test)(?:\.\w+)*\(\s*(?:'[^'\n]*'|"[^"\n]*"|`[^`\n]*`)\s*,\s*\{\s*timeout\s*:\s*\d|\btest\.setTimeout\s*\(|\bsetConfig\(\s*\{[^}]*testTimeout/gm,
   ),
+  // Retries set inside a test file: test.describe.configure({ retries: N }) or an options object { retry: N }.
+  rule('retry-config', /\.configure\(\s*\{[^}]*\bretr(?:y|ies)\s*:\s*[1-9]|\{\s*retry\s*:\s*[1-9]/g),
 ];
 // shortcut: a config timeout is counted, not compared with a recorded value; the baseline holds today's count and shrinks.
 const CONFIG_RULES = [
   rule('raised-timeout', /\b(?:testTimeout|hookTimeout|timeout)\s*:\s*\d/g),
   // Vitest `retry: N` (N above 0).
-  rule('retry-config', /\bretry\s*:\s*[1-9]/g),
+  rule('retry-config', /\bretry\s*:\s*[^,\n}]*[1-9]/g),
 ];
 
 // Playwright `retries`: above 1, or 1 or more without failOnFlakyTests: true (site's `retries: 0` is fine).
